@@ -1,0 +1,22 @@
+﻿# Render.com deployment configuration.
+# One command to deploy: push to GitHub, then `render deploy --service pharmatarget`.
+# Or connect the repo in the Render dashboard and Render will pick this file up automatically.
+#
+# Service type: Docker web service.
+# The Dockerfile copies data/deploy/ (36 MB) and web/dist/ at build time, so
+# no build-time data step is needed on Render.
+#
+# Free plan: 512 MB RAM, 0.1 CPU, sleeps after 15 min of inactivity.
+# Render injects PORT automatically; the CMD in the Dockerfile honours it.
+
+services:
+  - type: web
+    name: pharmatarget
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PHARMATARGET_DATA_DIR
+        value: /app/data/deploy

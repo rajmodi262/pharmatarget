@@ -1,0 +1,115 @@
+# PharmaTarget — pipeline parameters
+# Everything the analysis depends on that is not an economic assumption.
+# Economic assumptions live in economics.yaml so they can be swept independently.
+
+project:
+  client: "Northwind Pharma"
+  brand_label: "Northwind DOAC"
+  therapeutic_area: "Oral anticoagulants (DOAC)"
+
+years:
+  # Three years is non-negotiable: 2022->2023 is the pre-trend window used to
+  # test parallel trends, 2023->2024 is the treatment / hold-out window.
+  #
+  # Data year 2024 was released May 2026 (file MUP_DPR_RY26_..._DY24_NPIBN.csv),
+  # so the lag from period end to publication is ~17 months, not the ~2 years
+  # commonly quoted. Verified against the CMS DCAT catalog at build time.
+  all: [2022, 2023, 2024]
+  train_start: 2022
+  train_end: 2023      # model is fit on data through here
+  holdout: 2024        # back-test scores against this year, never seen in fit
+
+# The therapeutic class. Matching is done on the CMS Gnrc_Name field, which is
+# more stable across years than Brnd_Name.
+class_definition:
+  # The brand we are selling.
+  focus_brand:
+    brand_names: ["ELIQUIS"]
+    generic_names: ["APIXABAN"]
+  # Branded competitors inside the class.
+  competitors:
+    - brand_names: ["XARELTO"]
+      generic_names: ["RIVAROXABAN"]
+    - brand_names: ["PRADAXA"]
+      generic_names: ["DABIGATRAN ETEXILATE MESYLATE"]
+    - brand_names: ["SAVAYSA"]
+      generic_names: ["EDOXABAN TOSYLATE"]
+  # Older standard of care. In-class for market-size purposes, and the source
+  # of most switch opportunity.
+  comparators:
+    - brand_names: ["COUMADIN", "JANTOVEN"]
+      generic_names: ["WARFARIN SODIUM"]
+
+# Volume metric. Tot_30day_Fills normalises for days-supply differences between
+# BID (apixaban) and QD (rivaroxaban) products; Tot_Clms does not.
+volume_metric: "tot_30day_fills"
+
+opportunity_model:
+  # Quantile of the conditional distribution treated as the achievable frontier.
+  # tau=0.80 => "what a comparable prescriber in a comparable market reaches".
+  tau: 0.80
+  # Percentile of within-peer-group brand share treated as achievable.
+  achievable_share_pct: 75
+  peer_group: ["specialty_group", "census_region"]
+  n_estimators: 300
+  max_depth: 4
+  learning_rate: 0.05
+  min_samples_leaf: 40
+  random_state: 42
+
+suppression:
+  # CMS drops NPI x drug rows with < 11 claims from the file entirely.
+  # They are ABSENT, not blank. We size the missing mass by reconciling the
+  # provider-level totals in D2 against the sum of D1 rows.
+  threshold: 11
+  # Sensitivity settings run end-to-end; "ev" is the reported base case.
+  imputation_modes: ["zero", "ev", "max"]
+  base_mode: "ev"
+
+segmentation:
+  k_candidates: [3, 4, 5, 6, 7, 8]
+  bootstrap_runs: 25
+  bootstrap_frac: 0.80
+  random_state: 42
+
+response_model:
+  treatment_year: 2023     # first-payment-received year defining the treated cohort
+  pretrend_window: [2022, 2023]
+  outcome_window: [2023, 2024]
+  psm_caliper: 0.20        # in SD of the logit propensity
+  smd_threshold: 0.10      # covariate balance target after matching
+
+territory:
+  unit: "zip3"
+  n_reps_default: 60
+  n_reps_presolve: [40, 50, 60, 70, 80]
+  max_iterations: 40
+  # Contiguity graph. "queen" needs real ZCTA geometry; "knn" is the documented
+  # fallback used when shapefiles are unavailable.
+  adjacency_method: "knn"
+  adjacency_k: 6
+  # Acceptance thresholds enforced by tests/test_territory.py.
+  #
+  # target_cv is the BUSINESS aspiration (+/-10% workload spread) and is what a
+  # client asks for. max_cv is what this optimiser can actually deliver on
+  # indivisible ZIP3 units, and the gap between them is a real constraint, not
+  # slack in the code:
+  #
+  #   ~620 units / 60 territories = ~10 units per rep, so one unit is ~10% of a
+  #   territory's workload. Getting every territory inside +/-10% of the mean
+  #   would require moving fractions of a unit. Measured best with the balance
+  #   pass is CV ~0.16 at 60 reps (from 0.36 baseline).
+  #
+  # Real alignments close this gap by splitting ZIP3s at ZIP5 or by allowing
+  # shared coverage of dense units -- both out of scope here and listed in the
+  # README limitations. Do not lower max_cv to make a test pass; raise the unit
+  # resolution, which is the actual fix.
+  target_cv: 0.10
+  max_cv: 0.20
+  min_contiguity_rate: 0.95
+
+paths:
+  raw: "data/raw"
+  interim: "data/interim"
+  processed: "data/processed"
+  figures: "outputs/figures"

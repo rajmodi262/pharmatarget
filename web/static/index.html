@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PharmaTarget — Northwind DOAC field planning</title>
+<style>
+:root{
+  --paper:#FBFCFD; --panel:#FFFFFF; --rule:#E1E7EE;
+  --ink:#101B2B; --ink-mute:#5D6B7E;
+  --signal:#0057C7; --flag:#C2410C; --ok:#0F766E;
+  --d1:#EEF3F8; --d2:#DCE6F1; --d3:#C4D6EA; --d4:#A6C2E0; --d5:#83AAD4;
+  --d6:#5F91C7; --d7:#4176B4; --d8:#2A5C9B; --d9:#17437B; --d10:#0A2C5C;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --ui:"Inter Tight",Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.num,td.n,.kpi-val,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+a{color:var(--signal)}
+:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+
+/* layout */
+#app{display:flex;min-height:100vh}
+nav{width:220px;flex:0 0 220px;border-right:1px solid var(--rule);background:var(--panel);padding:24px 0;position:sticky;top:0;height:100vh}
+nav h1{font-size:15px;font-weight:600;margin:0 24px 4px;letter-spacing:-0.01em}
+nav .sub{font-size:11px;color:var(--ink-mute);margin:0 24px 28px;line-height:1.4}
+nav a{display:block;padding:8px 24px;color:var(--ink-mute);text-decoration:none;font-size:13px;transition:color .12s,background .12s}
+nav a:hover{color:var(--ink);background:#F5F8FB}
+nav a.active{color:var(--signal);font-weight:500;box-shadow:inset 2px 0 0 var(--signal)}
+main{flex:1;max-width:1440px;padding:32px 24px 64px}
+
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-mute);font-weight:500;margin:0 0 6px}
+h2{font-size:20px;font-weight:600;margin:0 0 4px;letter-spacing:-0.01em}
+h3{font-size:14px;font-weight:600;margin:0 0 10px}
+.lede{font-size:13px;color:var(--ink-mute);max-width:76ch;margin:0 0 24px}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:20px;margin-bottom:16px}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:1000px){.g2,.g4{grid-template-columns:1fr}nav{width:64px;flex:0 0 64px}nav h1,nav .sub{display:none}nav a{padding:10px 8px;font-size:10px;text-align:center}}
+
+/* banner */
+.banner{background:#FFF7ED;border:1px solid #FED7AA;color:#7C2D12;padding:10px 14px;border-radius:6px;font-size:12px;margin-bottom:20px}
+.banner b{color:var(--flag)}
+
+/* hero */
+.hero{font-size:26px;line-height:1.35;font-weight:500;letter-spacing:-0.02em;max-width:30ch;margin:0 0 8px}
+.hero .hl{color:var(--signal);font-family:var(--mono);font-weight:600}
+.tagpill{display:inline-block;font-size:10px;letter-spacing:.06em;padding:2px 7px;border-radius:3px;font-weight:600;vertical-align:middle}
+.t-back{background:#DCFCE7;color:#166534}
+.t-arith{background:#DBEAFE;color:#1E40AF}
+.t-scen{background:#FEF3C7;color:#92400E}
+
+/* kpi */
+.kpi{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:16px}
+.kpi-label{font-size:11px;color:var(--ink-mute);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px}
+.kpi-val{font-size:24px;font-weight:600;letter-spacing:-0.02em}
+.kpi-note{font-size:11px;color:var(--ink-mute);margin-top:4px}
+
+/* table */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-mute);font-weight:500;padding:8px 10px;border-bottom:1px solid var(--rule);white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--ink)}
+td{padding:7px 10px;border-bottom:1px solid #F1F5F9}
+td.n{text-align:right}
+tbody tr:hover{background:#F8FAFC}
+.chip{display:inline-block;min-width:22px;text-align:center;padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:11px;font-weight:600}
+.bar{height:5px;background:var(--d2);border-radius:2px;position:relative;min-width:44px}
+.bar>i{display:block;height:100%;background:var(--d7);border-radius:2px}
+
+/* controls */
+label.f{display:block;font-size:11px;color:var(--ink-mute);text-transform:uppercase;letter-spacing:.04em;margin:0 0 4px}
+select,input{font-family:var(--ui);font-size:13px;padding:6px 8px;border:1px solid var(--rule);border-radius:4px;background:var(--panel);color:var(--ink);width:100%}
+button{font-family:var(--ui);font-size:13px;padding:7px 12px;border:1px solid var(--rule);border-radius:4px;background:var(--panel);color:var(--ink);cursor:pointer;transition:border-color .12s,color .12s}
+button:hover{border-color:var(--signal);color:var(--signal)}
+button.primary{background:var(--signal);color:#fff;border-color:var(--signal)}
+button.primary:hover{opacity:.9;color:#fff}
+button:disabled{opacity:.4;cursor:not-allowed}
+input[type=range]{padding:0;accent-color:var(--signal)}
+
+.skel{background:linear-gradient(90deg,#F1F5F9 25%,#E8EEF4 50%,#F1F5F9 75%);background-size:200% 100%;animation:sk 1.4s infinite;border-radius:4px;height:14px;margin:8px 0}
+@keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@media(prefers-reduced-motion:reduce){.skel{animation:none}*{transition:none!important}}
+.empty{padding:40px 20px;text-align:center;color:var(--ink-mute);font-size:13px}
+.err{padding:16px;border:1px solid #FECACA;background:#FEF2F2;color:#991B1B;border-radius:6px;font-size:13px}
+.foot{font-size:11px;color:var(--ink-mute);margin-top:10px;line-height:1.5}
+.caveat{border-left:3px solid var(--flag);background:#FFF7ED;padding:12px 14px;border-radius:0 4px 4px 0;font-size:12px;color:#7C2D12;margin-top:12px}
+ul.lim{font-size:12px;color:var(--ink-mute);padding-left:18px;margin:0}
+ul.lim li{margin-bottom:8px}
+.scroll{overflow-x:auto}
+</style>
+</head>
+<body>
+<div id="app">
+  <nav>
+    <h1>PharmaTarget</h1>
+    <p class="sub">Northwind Pharma<br>DOAC field planning</p>
+    <a href="#/" data-r="/">Overview</a>
+    <a href="#/targets" data-r="/targets">Targets</a>
+    <a href="#/territories" data-r="/territories">Territories</a>
+    <a href="#/response" data-r="/response">Response</a>
+    <a href="#/method" data-r="/method">Method</a>
+  </nav>
+  <main id="view"><div class="skel" style="width:40%"></div><div class="skel" style="width:70%"></div></main>
+</div>
+
+<script>
+const API = location.origin;
+const $ = (h) => { const d=document.createElement('div'); d.innerHTML=h.trim(); return d.firstChild; };
+const fmt = (n,d=0) => n==null||isNaN(n) ? '--' : Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const pct = (n,d=1) => n==null||isNaN(n) ? '--' : (n*100).toFixed(d)+'%';
+const usd = (n) => n==null||isNaN(n) ? '--' : (Math.abs(n)>=1e6 ? '$'+(n/1e6).toFixed(1)+'M' : '$'+fmt(n));
+const dcol = (d) => `var(--d${Math.max(1,Math.min(10,Math.round(d)))})`;
+const dtext = (d) => d>=6 ? '#fff' : 'var(--ink)';
+const esc = (s) => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+let cache = {};
+async function api(path){
+  if(cache[path]) return cache[path];
+  const r = await fetch(API+path);
+  if(!r.ok){ const e=new Error('HTTP '+r.status); e.status=r.status; e.body=await r.text().catch(()=>''); throw e; }
+  const j = await r.json(); cache[path]=j; return j;
+}
+function errorBox(e){
+  if(e.status===503) return `<div class="err"><b>Pipeline output missing.</b><br>${esc(e.body).slice(0,300)}<br><br>Run <code>make sample</code> then reload.</div>`;
+  return `<div class="err"><b>Can't reach the data service.</b><br>It sleeps after 15 minutes of inactivity — retry in 30 seconds.<br><span class="mono" style="font-size:11px">${esc(e.message)}</span></div>`;
+}
+function loading(){ return '<div class="skel" style="width:35%"></div><div class="skel" style="width:65%"></div><div class="skel" style="width:50%"></div>'; }
+function banner(mode){
+  if(mode!=='SYNTHETIC') return '';
+  return `<div class="banner"><b>Synthetic data.</b> The generative process encodes the hypothesis the opportunity model tests, so confirming it here is circular by construction. This validates the <b>pipeline</b>, not the <b>finding</b>. Do not quote these numbers.</div>`;
+}
+
+/* ---------- charts (no libraries) ---------- */
+function svgLine(pts, {w=520,h=180,pad=34,color='var(--signal)',yRef=null,xlab='',ylab=''}={}){
+  if(!pts.length) return '<div class="empty">No data.</div>';
+  const xs=pts.map(p=>p[0]), ys=pts.map(p=>p[1]);
+  const x0=Math.min(...xs),x1=Math.max(...xs);
+  let y0=Math.min(...ys,yRef??Infinity), y1=Math.max(...ys,yRef??-Infinity);
+  if(y0===y1){y0-=1;y1+=1;}
+  const X=v=>pad+(v-x0)/(x1-x0||1)*(w-pad-8);
+  const Y=v=>h-pad-(v-y0)/(y1-y0||1)*(h-pad-12);
+  const d=pts.map((p,i)=>(i?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join(' ');
+  const ref = yRef!=null ? `<line x1="${pad}" x2="${w-8}" y1="${Y(yRef)}" y2="${Y(yRef)}" stroke="var(--flag)" stroke-dasharray="3 3" stroke-width="1"/><text x="${w-10}" y="${Y(yRef)-4}" text-anchor="end" font-size="9" fill="var(--flag)" font-family="var(--mono)">break-even</text>` : '';
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto">
+    <line x1="${pad}" x2="${w-8}" y1="${h-pad}" y2="${h-pad}" stroke="var(--rule)"/>
+    <line x1="${pad}" x2="${pad}" y1="8" y2="${h-pad}" stroke="var(--rule)"/>
+    ${ref}<path d="${d}" fill="none" stroke="${color}" stroke-width="1.8"/>
+    <text x="${pad}" y="${h-pad+14}" font-size="9" fill="var(--ink-mute)" font-family="var(--mono)">${fmt(x0)}</text>
+    <text x="${w-8}" y="${h-pad+14}" text-anchor="end" font-size="9" fill="var(--ink-mute)" font-family="var(--mono)">${fmt(x1)}</text>
+    <text x="${pad-4}" y="${h-pad}" text-anchor="end" font-size="9" fill="var(--ink-mute)" font-family="var(--mono)">${fmt(y0,2)}</text>
+    <text x="${pad-4}" y="14" text-anchor="end" font-size="9" fill="var(--ink-mute)" font-family="var(--mono)">${fmt(y1,2)}</text>
+    <text x="${w/2}" y="${h-4}" text-anchor="middle" font-size="10" fill="var(--ink-mute)">${esc(xlab)}</text>
+    <text x="10" y="${h/2}" text-anchor="middle" font-size="10" fill="var(--ink-mute)" transform="rotate(-90 10 ${h/2})">${esc(ylab)}</text>
+  </svg>`;
+}
+function svgMultiLine(series,{w=520,h=200,pad=36,xlab='',ylab=''}={}){
+  const all=series.flatMap(s=>s.pts); if(!all.length) return '<div class="empty">No data.</div>';
+  const x0=Math.min(...all.map(p=>p[0])),x1=Math.max(...all.map(p=>p[0]));
+  const y0=0,y1=Math.max(...all.map(p=>p[1]));
+  const X=v=>pad+(v-x0)/(x1-x0||1)*(w-pad-8), Y=v=>h-pad-(v-y0)/(y1-y0||1)*(h-pad-16);
+  const paths=series.map(s=>`<path d="${s.pts.map((p,i)=>(i?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join(' ')}" fill="none" stroke="${s.color}" stroke-width="1.8"/>`).join('');
+  const leg=series.map((s,i)=>`<g transform="translate(${pad+8},${16+i*14})"><rect width="9" height="3" y="-3" fill="${s.color}"/><text x="14" y="0" font-size="10" fill="var(--ink-mute)">${esc(s.name)}</text></g>`).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto">
+    <line x1="${pad}" x2="${w-8}" y1="${h-pad}" y2="${h-pad}" stroke="var(--rule)"/>
+    <line x1="${pad}" x2="${pad}" y1="8" y2="${h-pad}" stroke="var(--rule)"/>
+    ${paths}${leg}
+    <text x="${pad-4}" y="${h-pad}" text-anchor="end" font-size="9" fill="var(--ink-mute)" font-family="var(--mono)">0%</text>
+    <text x="${pad-4}" y="16" text-anchor="end" font-size="9" fill="var(--ink-mute)" font-family="var(--mono)">${pct(y1,0)}</text>
+    <text x="${w/2}" y="${h-4}" text-anchor="middle" font-size="10" fill="var(--ink-mute)">${esc(xlab)}</text>
+    <text x="10" y="${h/2}" text-anchor="middle" font-size="10" fill="var(--ink-mute)" transform="rotate(-90 10 ${h/2})">${esc(ylab)}</text>
+  </svg>`;
+}
+function heatmap(cells){
+  const max=Math.max(...cells.map(c=>c.hcp_count),1);
+  let g='';
+  for(let o=10;o>=1;o--){
+    g+=`<tr><th style="text-align:right;font-family:var(--mono)">${o}</th>`;
+    for(let v=1;v<=10;v++){
+      const c=cells.find(x=>x.opportunity_decile===o&&x.volume_decile===v);
+      const n=c?c.hcp_count:0, a=n/max;
+      const on=(o>=7&&v<=4), hi=(o<=4&&v>=7);
+      g+=`<td title="volume ${v} / opportunity ${o}: ${fmt(n)} HCPs" style="background:rgba(10,44,92,${(a*0.85).toFixed(3)});width:30px;height:26px;border:1px solid #fff;${on?'outline:2px solid var(--ok);outline-offset:-2px;':''}${hi?'outline:2px solid var(--flag);outline-offset:-2px;':''}"></td>`;
+    }
+    g+='</tr>';
+  }
+  let hdr='<tr><th></th>'; for(let v=1;v<=10;v++) hdr+=`<th style="text-align:center;font-family:var(--mono)">${v}</th>`; hdr+='</tr>';
+  return `<div class="scroll"><table style="width:auto;border-collapse:collapse">${g}${hdr}</table></div>
+  <div class="foot"><b>Rows</b> = opportunity decile &nbsp;·&nbsp; <b>Columns</b> = volume decile. Off-diagonal mass is the finding.<br>
+  <span style="color:var(--ok)">▢ green</span> low volume / high opportunity — the volume rule skips these.
+  <span style="color:var(--flag)">▢ orange</span> high volume / low opportunity — the volume rule over-serves these.</div>`;
+}
+
+/* ---------- routes ---------- */
+const routes = {};
+
+routes['/'] = async (el) => {
+  const s = await api('/api/summary');
+  const h1=s.headlines.h1, h2=s.headlines.h2, h3=s.headlines.h3, k=s.kpis, t=s.territory;
+  let sizing=null; try{ sizing=await api('/api/sizing'); }catch(e){}
+  let cp=null; try{ cp=await api('/api/callplan'); }catch(e){}
+
+  el.innerHTML = `
+  ${banner(s.data_mode)}
+  <p class="eyebrow">Recommendation</p>
+  <p class="hero">Targeting on modelled opportunity instead of prescription volume reaches
+    <span class="hl">${pct(h2.opportunity_reach)}</span> of addressable opportunity on the same call budget, against
+    <span class="hl">${pct(h2.volume_reach)}</span> today.</p>
+  <p class="lede">The two rankings disagree for ${pct(s.disagreement?.disagree_by_2plus_pct)} of prescribers. That disagreement is the entire argument: a high-volume prescriber already at 90% brand share has no headroom, and volume ranking cannot see it.</p>
+
+  <div class="grid g4" style="margin-bottom:20px">
+    <div class="kpi"><div class="kpi-label">Prescribers analysed</div><div class="kpi-val">${fmt(k.hcps_analysed)}</div><div class="kpi-note">Part D, 3 years</div></div>
+    <div class="kpi"><div class="kpi-label">Targeted</div><div class="kpi-val">${fmt(k.hcps_targeted)}</div><div class="kpi-note">${pct(k.pct_targeted)} of universe</div></div>
+    <div class="kpi"><div class="kpi-label">Monthly calls</div><div class="kpi-val">${fmt(k.monthly_calls)}</div><div class="kpi-note">implies ${fmt(k.implied_reps,0)} reps vs ${k.current_reps} today</div></div>
+    <div class="kpi"><div class="kpi-label">Workload imbalance</div><div class="kpi-val">${fmt(t?.imbalance_before,1)}× → ${fmt(t?.imbalance_after,1)}×</div><div class="kpi-note">contiguity ${pct(t?.contiguity_before,0)} → ${pct(t?.contiguity_after,0)}</div></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <p class="eyebrow">Exhibit E1 <span class="tagpill t-arith">Arithmetic</span></p>
+      <h3>Volume and opportunity rankings disagree for ${pct(s.disagreement?.disagree_by_2plus_pct)} of prescribers</h3>
+      ${cp?.disagreement_matrix?.length ? heatmap(cp.disagreement_matrix) : '<div class="empty">Run the pipeline.</div>'}
+    </div>
+    <div class="card">
+      <p class="eyebrow">Exhibit E3 <span class="tagpill t-arith">Arithmetic</span></p>
+      <h3>Opportunity-weighted allocation reaches more on the same budget</h3>
+      ${cp?.reach_curve?.length ? svgMultiLine(
+        [['opportunity','var(--d10)'],['volume','var(--d6)'],['geography','var(--ink-mute)']].map(([r,c])=>({
+          name:r, color:c, pts:cp.reach_curve.filter(x=>x.rule===r).map(x=>[x.pct_of_universe,x.pct_opportunity_reached])
+        })), {xlab:'Share of prescriber universe called', ylab:'Opportunity reached'}) : ''}
+      <div class="foot">No behavioural assumption. Given a fixed number of calls, this is how much addressable opportunity each rule puts a rep in front of.</div>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <p class="eyebrow">Exhibit E4 <span class="tagpill t-scen">Scenario</span></p>
+      <h3>The marginal rep stops paying for itself at ${fmt(h3.break_even_n_reps,0)} reps, not ${h3.current_n_reps}</h3>
+      ${sizing?.roi_curve?.length ? svgLine(sizing.roi_curve.filter(r=>r.marginal_roi!=null).map(r=>[r.n_reps,r.marginal_roi]),
+        {yRef:1.0,xlab:'Field force size (reps)',ylab:'Marginal ROI (× cost)'}) : ''}
+      <div class="foot">At ${h3.current_n_reps} reps the marginal rep returns <b class="mono">$${fmt(h3.marginal_roi_at_current,2)}</b> per $1.
+      Incremental contribution to break-even: <b class="mono">${usd(h3.incremental_profit)}</b>.</div>
+      <div class="caveat"><b>Scenario, not a result.</b> This depends on a fitted response curve, not on observed rep calls — there are none in CMS data. Sensitivity across the assumption grid puts break-even anywhere from ${fmt(h3.sensitivity_range?.[0],0)} to ${fmt(h3.sensitivity_range?.[1],0)} reps.</div>
+    </div>
+    <div class="card">
+      <p class="eyebrow">Back-test <span class="tagpill ${h1.gate_passed?'t-back':'t-scen'}">${h1.gate_passed?'Validated':'Gate failed'}</span></p>
+      <h3>Held-out year: does the ranking actually rank?</h3>
+      <table>
+        <tr><td>Spearman(decile, realised growth)</td><td class="n">${fmt(h1.decile_spearman,3)}</td></tr>
+        <tr><td>Share-growth capture vs volume rule</td><td class="n">${fmt(h1.share_growth_ratio,2)}×</td></tr>
+        <tr><td>Absolute-growth capture vs volume rule</td><td class="n">${fmt(h1.absolute_growth_ratio,2)}×</td></tr>
+      </table>
+      <div class="caveat">${esc(h1.caveat||'')}<br><br>
+      The back-test measures where growth <i>happened</i>, with no call data in the holdout. It cannot identify where a call would have <i>caused</i> growth. No CMS-only design can.</div>
+    </div>
+  </div>`;
+};
+
+routes['/targets'] = async (el) => {
+  el.innerHTML = `
+  <p class="eyebrow">Workhorse</p><h2>Targets</h2>
+  <p class="lede">Every prescriber, ranked on modelled opportunity. Filtering, sorting and pagination happen in SQL — the browser never holds the full table.</p>
+  <div class="grid" style="grid-template-columns:240px 1fr;align-items:start">
+    <div class="card" id="filters"></div>
+    <div class="card" style="padding:0"><div id="tbl">${loading()}</div></div>
+  </div>`;
+
+  const st={state:'',specialty:'',dmin:1,dmax:10,targets:false,q:'',sort:'opportunity',desc:true,page:1};
+  const meta = await api('/api/meta').catch(()=>({}));
+
+  el.querySelector('#filters').innerHTML = `
+    <h3>Filters</h3>
+    <div style="margin-bottom:12px"><label class="f" for="fq">Search name or NPI</label><input id="fq" placeholder="e.g. PATEL"></div>
+    <div style="margin-bottom:12px"><label class="f" for="fs">State</label><input id="fs" placeholder="e.g. TX" maxlength="2"></div>
+    <div style="margin-bottom:12px"><label class="f" for="fsp">Specialty</label>
+      <select id="fsp"><option value="">All</option>${['Cardiology','Internal Medicine','Primary Care','Advanced Practice','Hem/Onc','Nephrology','Neurology','Other'].map(s=>`<option>${s}</option>`).join('')}</select></div>
+    <div style="margin-bottom:12px"><label class="f" for="fd">Opportunity decile ≥ <span id="fdv" class="mono">1</span></label>
+      <input type="range" id="fd" min="1" max="10" value="1"></div>
+    <div style="margin-bottom:14px"><label style="font-size:12px;display:flex;gap:7px;align-items:center;text-transform:none;letter-spacing:0;color:var(--ink)">
+      <input type="checkbox" id="ft" style="width:auto"> Targets only</label></div>
+    <button id="fx" style="width:100%">Export current view</button>
+    <div class="foot" id="fnote"></div>`;
+
+  const bind=(id,ev,fn)=>el.querySelector(id).addEventListener(ev,fn);
+  bind('#fq','input',e=>{st.q=e.target.value.trim();st.page=1;draw()});
+  bind('#fs','input',e=>{st.state=e.target.value.trim().toUpperCase();st.page=1;draw()});
+  bind('#fsp','change',e=>{st.specialty=e.target.value;st.page=1;draw()});
+  bind('#fd','input',e=>{st.dmin=+e.target.value;el.querySelector('#fdv').textContent=e.target.value;st.page=1;draw()});
+  bind('#ft','change',e=>{st.targets=e.target.checked;st.page=1;draw()});
+  bind('#fx','click',()=>{
+    const u=`${API}/api/hcps/export/csv?decile_min=${st.dmin}&decile_max=${st.dmax}${st.state?'&state='+st.state:''}${st.targets?'&targets_only=true':''}`;
+    window.location.href=u; el.querySelector('#fnote').textContent='Exported.';
+  });
+
+  async function draw(){
+    const box=el.querySelector('#tbl'); box.innerHTML=loading();
+    const qs=new URLSearchParams({decile_min:st.dmin,decile_max:st.dmax,sort:st.sort,desc:st.desc,page:st.page,page_size:50});
+    if(st.state)qs.set('state',st.state); if(st.specialty)qs.set('specialty',st.specialty);
+    if(st.targets)qs.set('targets_only','true'); if(st.q)qs.set('q',st.q);
+    let d; try{ d=await fetch(`${API}/api/hcps?${qs}`).then(r=>{if(!r.ok)throw Object.assign(new Error('HTTP '+r.status),{status:r.status});return r.json()}); }
+    catch(e){ box.innerHTML=errorBox(e); return; }
+
+    if(!d.rows.length){ box.innerHTML=`<div class="empty">No prescribers match these filters.<br>Lower the decile threshold or clear the state filter to widen the search.</div>`; return; }
+    const cols=[['npi','NPI'],['last_name','Name'],['specialty_group','Specialty'],['state','St'],
+      ['class_fills','Class fills'],['brand_share','Brand share'],['opportunity','Opportunity'],
+      ['opportunity_decile','Opp'],['volume_decile','Vol'],['calls_per_month','Calls/mo']];
+    box.innerHTML=`<div class="scroll"><table><thead><tr>${cols.map(([k,l])=>
+      `<th data-k="${k}">${l}${st.sort===k?(st.desc?' ↓':' ↑'):''}</th>`).join('')}</tr></thead><tbody>
+      ${d.rows.map(r=>`<tr>
+        <td class="n mono">${r.npi}</td>
+        <td>${esc(r.last_name)}, ${esc((r.first_name||'').slice(0,1))}.</td>
+        <td>${esc(r.specialty_group)}</td><td class="mono">${esc(r.state)}</td>
+        <td class="n">${fmt(r.class_fills)}</td>
+        <td class="n"><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">
+          <span class="mono" style="font-size:11px">${pct(r.brand_share,0)}</span>
+          <span class="bar" style="width:44px"><i style="width:${Math.min(100,(r.brand_share||0)*100)}%"></i></span></div></td>
+        <td class="n">${fmt(r.opportunity)}</td>
+        <td class="n"><span class="chip" style="background:${dcol(r.opportunity_decile)};color:${dtext(r.opportunity_decile)}">${r.opportunity_decile}</span></td>
+        <td class="n"><span class="chip" style="background:#EEF2F6;color:var(--ink-mute)">${r.volume_decile}</span></td>
+        <td class="n mono">${fmt(r.calls_per_month,2)}</td></tr>`).join('')}
+      </tbody></table></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-top:1px solid var(--rule)">
+        <span class="foot" style="margin:0">${fmt(d.total)} prescribers · page ${d.page} of ${fmt(d.pages)}</span>
+        <span><button id="pp" ${d.page<=1?'disabled':''}>Previous</button>
+        <button id="pn" ${d.page>=d.pages?'disabled':''}>Next</button></span></div>`;
+
+    box.querySelectorAll('th').forEach(th=>th.onclick=()=>{
+      const k=th.dataset.k;
+      if(!['opportunity','class_fills','brand_share','calls_per_month','opportunity_decile','volume_decile','npi'].includes(k))return;
+      if(st.sort===k)st.desc=!st.desc; else {st.sort=k;st.desc=true;} st.page=1; draw();
+    });
+    const pp=box.querySelector('#pp'), pn=box.querySelector('#pn');
+    if(pp)pp.onclick=()=>{st.page--;draw()}; if(pn)pn.onclick=()=>{st.page++;draw()};
+  }
+  draw();
+};
+
+routes['/territories'] = async (el) => {
+  const meta=await api('/api/meta').catch(()=>({territory_config:{n_reps_presolve:[40,50,60,70,80]}}));
+  const presolve=meta.territory_config?.n_reps_presolve||[40,50,60,70,80];
+  el.innerHTML=`<p class="eyebrow">Exhibit E5</p><h2>Territory alignment</h2>
+    <p class="lede">Capacity-constrained clustering with a contiguity repair step. Plain capacitated k-means leaves a rep in Ohio owning ZIP3s in Indiana — tidy on a map, unimplementable in the field.</p>
+    <div class="card" style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+      <div><label class="f" for="nr">Field force size</label>
+        <input type="range" id="nr" min="0" max="${presolve.length-1}" value="${Math.max(0,presolve.indexOf(60))}" style="width:200px">
+        <span id="nrv" class="mono" style="margin-left:8px;font-weight:600"></span></div>
+      <div><label class="f">Alignment</label>
+        <button id="tb" class="primary">Optimised</button> <button id="tbb">Baseline</button></div>
+    </div>
+    <div id="terr">${loading()}</div>`;
+
+  let n=presolve[Math.max(0,presolve.indexOf(60))], mode='optimised';
+  const nrv=el.querySelector('#nrv');
+  el.querySelector('#nr').addEventListener('input',e=>{n=presolve[+e.target.value];nrv.textContent=n+' reps';draw()});
+  el.querySelector('#tb').onclick=()=>{mode='optimised';el.querySelector('#tb').className='primary';el.querySelector('#tbb').className='';draw()};
+  el.querySelector('#tbb').onclick=()=>{mode='baseline';el.querySelector('#tbb').className='primary';el.querySelector('#tb').className='';draw()};
+  nrv.textContent=n+' reps';
+
+  async function draw(){
+    const box=el.querySelector('#terr'); box.innerHTML=loading();
+    const useN = mode==='baseline' ? (meta.territory_config?.n_reps_default||60) : n;
+    let d; try{ d=await api(`/api/territories?n_reps=${useN}&alignment=${mode}`); }catch(e){ box.innerHTML=errorBox(e); return; }
+    const s=(d.stats&&d.stats[0])||{}, h=d.headline||{};
+
+    const units=d.units||[];
+    const lats=units.map(u=>u.lat),lons=units.map(u=>u.lon);
+    const W=560,H=330,P=10;
+    const X=v=>P+(v-Math.min(...lons))/((Math.max(...lons)-Math.min(...lons))||1)*(W-2*P);
+    const Y=v=>H-P-(v-Math.min(...lats))/((Math.max(...lats)-Math.min(...lats))||1)*(H-2*P);
+    const hue=t=>`hsl(${(t*47)%360} 52% ${mode==='baseline'?68:56}%)`;
+    const map=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:#F7FAFC;border-radius:4px">
+      ${units.map(u=>`<circle cx="${X(u.lon).toFixed(1)}" cy="${Y(u.lat).toFixed(1)}" r="${(3+Math.sqrt(u.workload||1)/2.2).toFixed(1)}"
+        fill="${hue(u.territory)}" fill-opacity="0.82" stroke="#fff" stroke-width="0.6">
+        <title>ZIP3 ${u.unit} (${u.state}) — territory ${u.territory}, ${fmt(u.workload)} calls/mo, ${fmt(u.n_hcps)} HCPs</title></circle>`).join('')}
+    </svg><div class="foot">Each dot is a ZIP3, sized by monthly call workload and coloured by territory. Straight-line geography — no drive-time matrix.</div>`;
+
+    const terrs=(d.territories||[]).slice().sort((a,b)=>b.workload-a.workload);
+    const mx=Math.max(...terrs.map(t=>t.workload),1), mean=terrs.reduce((a,t)=>a+t.workload,0)/(terrs.length||1);
+    const bars=`<div style="max-height:300px;overflow-y:auto">${terrs.map(t=>{
+      const off=Math.abs(t.workload-mean)/mean;
+      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+        <span class="mono" style="font-size:10px;width:24px;color:var(--ink-mute)">${t.territory}</span>
+        <span class="bar" style="flex:1;height:9px"><i style="width:${(t.workload/mx*100).toFixed(1)}%;background:${off>0.10?'var(--flag)':'var(--d7)'}"></i></span>
+        <span class="mono" style="font-size:10px;width:42px;text-align:right">${fmt(t.workload)}</span></div>`;
+    }).join('')}</div>
+    <div class="foot">Mean <span class="mono">${fmt(mean)}</span> calls/month. Bars in <span style="color:var(--flag)">orange</span> sit outside ±10% of it.</div>`;
+
+    box.innerHTML=`<div class="grid g4" style="margin-bottom:16px">
+      <div class="kpi"><div class="kpi-label">Workload imbalance</div><div class="kpi-val">${fmt(s.imbalance_ratio,2)}×</div><div class="kpi-note">max ÷ min territory</div></div>
+      <div class="kpi"><div class="kpi-label">Workload CV</div><div class="kpi-val">${fmt(s.workload_cv,3)}</div><div class="kpi-note">baseline ${fmt(h.cv_before,3)}</div></div>
+      <div class="kpi"><div class="kpi-label">Contiguity</div><div class="kpi-val" style="color:${s.contiguity_rate>=0.95?'var(--ok)':'var(--flag)'}">${pct(s.contiguity_rate,0)}</div><div class="kpi-note">single-component territories</div></div>
+      <div class="kpi"><div class="kpi-label">Mean travel</div><div class="kpi-val">${fmt(s.mean_weighted_distance_mi)} mi</div><div class="kpi-note">baseline ${fmt(h.travel_before)} mi</div></div>
+    </div>
+    <div class="grid g2">
+      <div class="card"><h3>${mode==='baseline'?'Before — alphabetical by state':'After — capacity-constrained, contiguous'}</h3>${map}</div>
+      <div class="card"><h3>Workload per territory</h3>${bars}</div>
+    </div>
+    ${mode==='optimised'?`<div class="card"><div class="foot" style="margin:0">
+      ZIP3 units are indivisible and each is roughly 10% of a territory's workload, which bounds achievable CV near 0.15 — the ±10% business target needs ZIP5 splitting, which is out of scope here and listed under limitations.</div></div>`:''}`;
+  }
+  draw();
+};
+
+routes['/response'] = async (el) => {
+  let d; try{ d=await api('/api/response'); }catch(e){ el.innerHTML=errorBox(e); return; }
+  const pt=d.pretrend||{}, did=d.did||{}, nv=d.naive_ols||{}, mt=d.matching||{};
+  el.innerHTML=`<p class="eyebrow">Module 4</p><h2>Promotional response</h2>
+  <p class="lede">Does manufacturer payment exposure associate with brand share? The interesting number here is not the estimate — it is the gap between the naive estimate and the matched one.</p>
+  <div class="grid g2">
+    <div class="card"><h3>The selection gap</h3>
+      <table>
+        <tr><td>Naive OLS elasticity</td><td class="n">${fmt(nv.elasticity,4)}</td></tr>
+        <tr><td>95% CI</td><td class="n mono" style="font-size:11px">${fmt(nv.ci_low,4)} … ${fmt(nv.ci_high,4)}</td></tr>
+        <tr><td>Matched DiD (share points)</td><td class="n">${fmt(did.did_estimate,4)}</td></tr>
+        <tr><td>Matched pairs</td><td class="n">${fmt(mt.n_pairs)}</td></tr>
+        <tr><td>Worst post-match SMD</td><td class="n">${fmt(mt.worst_smd_after,3)} ${mt.balanced?'<span style="color:var(--ok)">balanced</span>':'<span style="color:var(--flag)">imbalanced</span>'}</td></tr>
+      </table>
+      <div class="foot">The distance between the naive and matched estimates is what selection buys the manufacturer. It is the reason the naive number must never be quoted alone.</div>
+    </div>
+    <div class="card"><h3>Parallel-trends test</h3>
+      <table>
+        <tr><td>Treated pre-period Δ share</td><td class="n">${fmt(pt.treated_pre_delta,4)}</td></tr>
+        <tr><td>Control pre-period Δ share</td><td class="n">${fmt(pt.control_pre_delta,4)}</td></tr>
+        <tr><td>Difference</td><td class="n">${fmt(pt.difference,4)}</td></tr>
+        <tr><td>p-value</td><td class="n">${fmt(pt.p_value,4)}</td></tr>
+      </table>
+      <div class="${pt.parallel_trends_holds?'foot':'caveat'}">
+        ${pt.parallel_trends_holds
+          ? 'Pre-trends are statistically indistinguishable. The difference-in-differences design is defensible — subject to the observational caveats below.'
+          : '<b>Pre-trend test failed.</b> Treated and control prescribers were <i>already</i> diverging before any payment was received. The identifying assumption does not hold, so the estimate below is reported as an <b>association only</b> and all causal language has been removed. This was the pre-committed response, written into the charter before the model was fit.'}
+      </div>
+      <div style="margin-top:10px" class="foot"><b>Interpretation:</b> ${esc(did.interpretation||'--')}</div>
+    </div>
+  </div>
+  <div class="card"><h3>Why every estimate here is an upper bound</h3><div class="caveat" style="margin-top:0">${esc(d.caveat||'')}</div></div>`;
+};
+
+routes['/method'] = async (el) => {
+  let m; try{ m=await api('/api/meta'); }catch(e){ el.innerHTML=errorBox(e); return; }
+  const pm=m.potential_model||{}, sfa=m.sfa_crosscheck||{}, sh=m.shap_top_driver||{}, op=m.open_payments_match||{};
+  const supp=Object.entries(m.suppression||{}).find(([k])=>k.includes('ev'))?.[1]||{};
+  el.innerHTML=`${banner(m.data_mode)}
+  <p class="eyebrow">Method</p><h2>How this was built, and where it breaks</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Pipeline</h3>
+      <table><tr><td>Data mode</td><td class="n mono">${esc(m.data_mode)}</td></tr>
+      <tr><td>Years</td><td class="n mono">${(m.years?.all||[]).join(', ')}</td></tr>
+      <tr><td>Hold-out year</td><td class="n mono">${m.years?.holdout}</td></tr>
+      <tr><td>Volume metric</td><td class="n mono">${esc(m.volume_metric)}</td></tr>
+      <tr><td>Frontier quantile τ</td><td class="n mono">${fmt(pm.tau,2)}</td></tr>
+      <tr><td>In-sample coverage</td><td class="n mono">${fmt(pm.in_sample_coverage,3)}</td></tr>
+      <tr><td>SFA cross-check (Spearman)</td><td class="n mono">${fmt(sfa.spearman,3)}</td></tr>
+      <tr><td>Top SHAP driver</td><td class="n mono" style="font-size:11px">${esc(sh.feature||'--')} (${pct(sh.share,0)})</td></tr></table>
+      <div class="foot">τ=0.80 is the achievable frontier, not the conditional mean. A corrected-OLS stochastic-frontier approximation ranks prescribers almost identically, so the choice of quantile GBM is a convenience rather than a load-bearing assumption.</div>
+    </div>
+    <div class="card"><h3>Data quality, measured not assumed</h3>
+      <table><tr><td>NPI-years with suppressed rows</td><td class="n">${pct(supp.pct_npi_years_affected,1)}</td></tr>
+      <tr><td>Claim volume hidden by suppression</td><td class="n">${pct(supp.hidden_share_of_total,1)}</td></tr>
+      <tr><td>Open Payments NPI fill rate</td><td class="n">${pct(op.npi_fill_rate,1)}</td></tr>
+      <tr><td>Linked to prescriber universe</td><td class="n">${pct(op.link_rate,1)}</td></tr>
+      <tr><td>Unmapped manufacturer rows</td><td class="n">${fmt(op.unmapped_manufacturer_rows)}</td></tr></table>
+      <div class="foot">CMS <b>removes</b> NPI×drug rows under 11 claims from the file — they are absent, not blank. Hidden volume is sized by reconciling provider-level totals against the sum of drug rows, then imputed under a truncated distribution. Three imputation modes run end to end.</div>
+    </div>
+  </div>
+  <div class="card"><h3>Gates</h3><table>
+    ${Object.entries(m.gates||{}).filter(([,v])=>v).map(([k,v])=>
+      `<tr><td>${k.toUpperCase().replace('_',' ')}</td><td class="n">${v.passed?'<span style="color:var(--ok)">passed</span>':'<span style="color:var(--flag)">failed → pre-committed pivot</span>'}</td>
+      <td class="foot" style="padding-left:14px">${esc(v.criterion||'')}</td></tr>`).join('')}
+  </table></div>
+  <div class="card"><h3>Economic assumptions</h3><div class="scroll"><table>
+    <thead><tr><th>Assumption</th><th style="text-align:right">Low</th><th style="text-align:right">Base</th><th style="text-align:right">High</th><th>Basis</th></tr></thead><tbody>
+    ${Object.entries(m.economic_assumptions||{}).filter(([k])=>k!=='sizing').map(([k,v])=>
+      `<tr><td class="mono" style="font-size:11px">${esc(k)}</td><td class="n">${fmt(v.low,2)}</td><td class="n"><b>${fmt(v.base,2)}</b></td><td class="n">${fmt(v.high,2)}</td>
+      <td class="foot" style="max-width:380px;padding-left:14px">${esc(v.basis||'')}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="foot">Public benchmarks, not the client's actuals. The tornado chart on Overview ranks these by their effect on the break-even headcount.</div>
+  </div>
+  <div class="card"><h3>Limitations</h3><ul class="lim">${(m.limitations||[]).map(l=>`<li>${esc(l)}</li>`).join('')}</ul></div>
+  <div class="card"><h3>Sources</h3><ul class="lim">${(m.sources||[]).map(s=>`<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a></li>`).join('')}</ul></div>`;
+};
+
+/* ---------- router ---------- */
+async function render(){
+  const path=(location.hash.replace(/^#/,'')||'/');
+  document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.dataset.r===path));
+  const el=document.getElementById('view');
+  el.innerHTML=loading();
+  const fn=routes[path]||routes['/'];
+  try{ await fn(el); }catch(e){ el.innerHTML=errorBox(e); }
+  window.scrollTo(0,0);
+}
+window.addEventListener('hashchange',render);
+render();
+</script>
+</body>
+</html>

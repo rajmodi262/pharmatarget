@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Lint
+        run: python -m ruff check src api tests
+
+      - name: Test
+        run: python -m pytest tests/ -q
+
+      # The pipeline runs end to end on every push. A unit test can pass while
+      # the stages no longer compose; this catches that.
+      - name: Pipeline smoke test
+        run: python -m src.pipeline --synthetic --sample
+
+      - name: API smoke test
+        run: |
+          python -m uvicorn api.main:app --port 8000 &
+          sleep 8
+          for ep in health summary hcps callplan sizing backtest segments response meta; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8000/api/$ep")
+            echo "/api/$ep -> $code"
+            [ "$code" = "200" ] || exit 1
+          done
+          curl -s -o /dev/null -w 'territories -> %{http_code}\n' \
+            "http://127.0.0.1:8000/api/territories?n_reps=60"

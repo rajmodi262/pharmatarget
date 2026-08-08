@@ -1,0 +1,69 @@
+# Open Payments manufacturer name normalisation.
+#
+# Manufacturer legal names in Open Payments change across years (subsidiaries,
+# reorganisations, "Inc." vs "Inc"). Fuzzy-matching these silently is how you
+# end up attributing a competitor's spend to your own brand. Explicit mapping
+# instead: unmatched names are logged, not guessed.
+
+# VERIFIED against the live Open Payments datastore for program years 2022-2024
+# via `python -m src.ingest.download --discover-manufacturers` on 2026-08-08.
+# Do not hand-edit from memory -- rerun discovery.
+#
+# WHY DISCOVERY EXISTS. Every name below was wrong when guessed:
+#   guessed "Bristol-Myers Squibb Company"  actual "Bristol Myers Squibb Company"  (no hyphen)
+#   guessed "Pfizer Inc."                   actual "PFIZER INC."                   (upper case)
+#   guessed "Janssen Pharmaceuticals, Inc." actual "Janssen Pharmaceuticals, Inc"  (no period)
+#   guessed "Daiichi Sankyo, Inc."          actual "Daiichi Sankyo Inc."           (comma moved)
+# An exact-match filter on a name that does not exist returns zero rows and no
+# error, so every one of these would have silently under-captured.
+#
+# AND THE NAMES DRIFT BETWEEN YEARS, measured not assumed:
+#   Bayer    2022: 1 name    2023: 2 names   (Bayer Healthcare LLC appears)
+#   Daiichi  2022: 1 name    2023: 2 names   (Daiichi Sankyo Company LTD appears)
+#   Janssen  2022: 2 names   2023: 1 name    2024: 3 names
+# The union across all three years is listed. download.py logs any configured
+# name that matches zero rows in a given year.
+#
+# NOTE ON BMS. "Bristol Myers Squibb Company" carries only ~124 payment records;
+# the apixaban alliance reports through "E.R. Squibb & Sons, L.L.C.". Filtering
+# on the headline corporate name alone would have missed essentially all of it.
+
+parents:
+  BRISTOL_MYERS_SQUIBB:
+    - "Bristol Myers Squibb Company"
+    - "E.R. Squibb & Sons, L.L.C."
+  PFIZER:
+    - "PFIZER INC."
+  JANSSEN:
+    - "Janssen Pharmaceuticals, Inc"
+    - "Janssen Biotech, Inc."
+    - "Janssen Global Services, LLC"
+    - "Janssen Research & Development, LLC"
+  BAYER:
+    - "Bayer HealthCare Pharmaceuticals Inc."
+    - "Bayer Healthcare Pharmaceuticals Inc."
+    - "Bayer Healthcare LLC"
+  BOEHRINGER:
+    - "Boehringer Ingelheim Pharmaceuticals, Inc."
+  DAIICHI_SANKYO:
+    - "Daiichi Sankyo Inc."
+    - "Daiichi Sankyo Company LTD"
+
+# Deliberately EXCLUDED, though discovery surfaced them under the "Johnson"
+# needle: Johnson & Johnson Surgical Vision, Johnson & Johnson Vision Care,
+# Johnson and Johnson International. These are ophthalmic and device units with
+# no anticoagulant franchise -- including them would attribute unrelated
+# promotional spend to the competitive set and bias the response model.
+
+# Which parents co-promote the focus brand. Apixaban is a BMS/Pfizer alliance,
+# so payments from either count as "focus brand" promotional exposure.
+focus_brand_parents:
+  - BRISTOL_MYERS_SQUIBB
+  - PFIZER
+
+# In-class competitor promotion, used as a control in the response model.
+competitor_parents:
+  - JANSSEN
+  - BAYER
+  - BOEHRINGER
+  - DAIICHI_SANKYO

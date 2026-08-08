@@ -1,0 +1,13 @@
+﻿# API-only requirements for the Docker image.
+# The pipeline requirements (scikit-learn, scipy, shap, matplotlib, numba, etc.)
+# are NOT needed at runtime -- the parquet files are pre-computed.
+# Keeping this file separate halves the image size.
+duckdb>=1.0
+pandas>=1.5
+pyarrow>=14.0
+numpy>=1.24
+PyYAML>=6.0
+
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.6

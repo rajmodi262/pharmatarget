@@ -1,0 +1,41 @@
+data/
+*.parquet
+*.duckdb
+*.csv
+!tests/fixtures/*.csv
+# The deploy bundle (36 MB, safe to commit -- under 90 MB threshold).
+!data/deploy/
+!data/deploy/*.parquet
+!data/manifest.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node
+node_modules/
+web/dist/
+# The pre-built frontend is committed so Docker needs no Node at build time.
+!web/dist/
+!web/dist/**
+.vite/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Secrets
+.env
+
+# portable toolchain (not part of the repo)
+.tools/
+
+# Raw source data (CMS CSVs, gazetteer files) -- too large and not code
+dataset/

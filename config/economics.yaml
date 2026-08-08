@@ -1,0 +1,86 @@
+# PharmaTarget — economic assumptions
+#
+# RULE: no dollar figure appears anywhere in this project that is not derived
+# from a parameter in this file. Every parameter carries a base, a range, and a
+# stated basis. The tornado chart (src/models/sizing.py) sweeps every one of
+# them so a reader can see which assumptions the conclusion actually depends on.
+#
+# These are public benchmarks, NOT Northwind's actuals. Said plainly in the
+# README and on the /method route.
+
+rep_cost_annual:
+  base: 250000
+  low: 200000
+  high: 300000
+  unit: "USD/year"
+  basis: >
+    Fully loaded US pharma field representative: salary, bonus, benefits,
+    fleet, samples, training and district overhead. Public industry
+    benchmarks cluster in the 200-300k range; midpoint taken as base.
+
+calls_per_rep_per_day:
+  base: 8
+  low: 6
+  high: 10
+  unit: "calls/day"
+  basis: "Standard US primary-care field force reach assumption."
+
+selling_days_per_month:
+  base: 20
+  low: 18
+  high: 21
+  unit: "days/month"
+  basis: "261 working days less vacation, training and holidays, / 12."
+
+net_revenue_per_30day_fill:
+  base: 380
+  low: 300
+  high: 450
+  unit: "USD/30-day fill"
+  basis: >
+    Branded DOAC list price of roughly 550-600 per 30-day supply, less an
+    assumed gross-to-net of 30-40% (rebates to PBMs and Part D plans,
+    340B, coverage-gap discounts). Highly plan-mix dependent; the range is
+    wide on purpose.
+
+contribution_margin:
+  base: 0.87
+  low: 0.80
+  high: 0.92
+  unit: "fraction"
+  basis: >
+    Branded small-molecule gross margin net of COGS and distribution.
+    Excludes R&D and central SG&A, which are not decision-relevant to a
+    field-force sizing question.
+
+call_response_ceiling:
+  base: 0.28
+  low: 0.15
+  high: 0.40
+  unit: "fraction of remaining opportunity capturable per year at saturation"
+  basis: >
+    Asymptote of the Hill response curve fitted in src/models/response.py on
+    the 2022->2023 promotional panel. The fitted value is used when the
+    response module has run; this base is the fallback and the sweep anchor.
+
+call_response_half_saturation:
+  base: 12.0
+  low: 6.0
+  high: 24.0
+  unit: "annual calls to reach 50% of ceiling response"
+  basis: "Hill k parameter; fitted, with the range taken from the bootstrap CI."
+
+# Sizing search space for the marginal-ROI curve.
+sizing:
+  # The range must span the point where the marginal rep stops paying, or
+  # break_even_reps() just returns the top of the grid and the headline becomes
+  # an artefact of the search window rather than a finding.
+  #
+  # On real CMS data the unconstrained call plan wants ~580 reps, so a 30-110
+  # window never crosses mROI = 1 and reported "break-even at 110" every time.
+  # Widened to cover the whole plausible region; the step is coarser to keep the
+  # tornado's 7 x 2 re-solves quick.
+  rep_range_min: 30
+  rep_range_max: 700
+  rep_range_step: 10
+  current_n_reps: 60

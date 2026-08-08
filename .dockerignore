@@ -1,0 +1,48 @@
+﻿# Raw source data -- never in the image.
+dataset/
+data/raw/
+data/interim/
+data/processed/
+
+# Deploy bundle IS included via explicit COPY in the Dockerfile.
+# List it here so Docker does not send the whole data/ tree as context;
+# the Dockerfile copies data/deploy/ and data/manifest.json explicitly.
+data/
+!data/deploy/
+!data/manifest.json
+
+# Portable Node toolchain -- not needed inside the image.
+.tools/
+
+# Node build artefacts.
+web/node_modules/
+node_modules/
+web/src/
+web/index.html
+web/package*.json
+web/postcss.config.js
+web/tailwind.config.ts
+web/tsconfig.json
+web/vite.config.ts
+web/README.md
+web/static/
+
+# Python cache and test artefacts.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Virtualenvs.
+.venv/
+venv/
+
+# Outputs and dev artefacts.
+outputs/
+.github/
+.vscode/
+.idea/
+.env
+*.log
+*.err

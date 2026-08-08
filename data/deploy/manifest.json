@@ -1,0 +1,459 @@
+{
+  "raw_partd_provider_2022": {
+    "rows": 1332309,
+    "source": "dataset\\mup_dpr_ry24_p04_v20_dy22_npi.csv"
+  },
+  "raw_partd_drug_2022": {
+    "class_rows": 498589,
+    "npis": 1057566,
+    "unparseable_tot_clms": 0,
+    "source": "dataset\\MUP_DPR_RY24_P04_V10_DY22_NPIBN.csv"
+  },
+  "raw_partd_provider_2023": {
+    "rows": 1380665,
+    "source": "dataset\\mup_dpr_ry25_p04_v20_dy23_npi.csv"
+  },
+  "raw_partd_drug_2023": {
+    "class_rows": 503704,
+    "npis": 1104162,
+    "unparseable_tot_clms": 0,
+    "source": "dataset\\MUP_DPR_RY25_P04_V10_DY23_NPIBN.csv"
+  },
+  "raw_partd_provider_2024": {
+    "rows": 1416883,
+    "source": "dataset\\mup_dpr_ry26_p04_v20_dy24_npi.csv"
+  },
+  "raw_partd_drug_2024": {
+    "class_rows": 517758,
+    "npis": 1139455,
+    "unparseable_tot_clms": 0,
+    "source": "dataset\\MUP_DPR_RY26_P04_V10_DY24_NPIBN.csv"
+  },
+  "data_mode": {
+    "mode": "REAL",
+    "years": [
+      2022,
+      2023,
+      2024
+    ],
+    "source": "data.cms.gov",
+    "note": "Streamed and filtered at ingest; see src/ingest/download.py"
+  },
+  "raw_open_payments_2023": {
+    "rows": 1628017,
+    "names_matched": 13,
+    "names_configured": 13,
+    "names_with_zero_rows": [],
+    "source": "dataset\\OP_DTL_GNRL_PGYR2023_P06302026_06032026.csv"
+  },
+  "raw_open_payments_2024": {
+    "rows": 1682649,
+    "names_matched": 13,
+    "names_configured": 13,
+    "names_with_zero_rows": [],
+    "source": "dataset\\OP_DTL_GNRL_PGYR2024_P06302026_06032026.csv"
+  },
+  "potential_model": {
+    "tau": 0.8,
+    "n_train": 400,
+    "in_sample_coverage": 0.785,
+    "n_features": 15
+  },
+  "zip3_units": {
+    "rows": 896,
+    "cols": 12,
+    "path": "data\\processed\\zip3_units.parquet"
+  },
+  "geography": {
+    "zip3_units": 896,
+    "gazetteer": "2024_Gaz_zcta_national.txt",
+    "places": "PLACES__Local_Data_for_Better_Health__ZCTA_Data__2025_release.csv",
+    "has_prevalence": true,
+    "population_total": 313935419.0
+  },
+  "raw_open_payments_2022": {
+    "rows": 1461955,
+    "names_matched": 12,
+    "names_configured": 13,
+    "names_with_zero_rows": [
+      "Bayer Healthcare LLC"
+    ],
+    "source": "dataset\\OP_DTL_GNRL_PGYR2022_P06302026_06032026 (1).csv"
+  },
+  "open_payments_match": {
+    "payment_rows": 2964259,
+    "rows_with_npi": 2962878,
+    "npi_fill_rate": 0.9995,
+    "distinct_npis_in_payments": 242937,
+    "npis_linked_to_prescribers": 219494,
+    "link_rate": 0.9035,
+    "unmapped_manufacturer_rows": 0
+  },
+  "suppression_ev": {
+    "npi_years": 4129857.0,
+    "with_suppression": 4116021.0,
+    "hidden_claims": 667217234.0,
+    "visible_claims": 4200923017.0,
+    "pct_npi_years_affected": 0.9966,
+    "hidden_share_of_total": 0.1371
+  },
+  "mart_hcp_metrics": {
+    "rows": 4129857,
+    "cols": 35,
+    "path": "data\\processed\\mart_hcp_metrics.parquet"
+  },
+  "mart_peer_benchmarks": {
+    "rows": 135,
+    "cols": 6,
+    "path": "data\\processed\\mart_peer_benchmarks.parquet"
+  },
+  "mart_payments": {
+    "rows": 468619,
+    "cols": 9,
+    "path": "data\\processed\\mart_payments.parquet"
+  },
+  "mart_payment_onset": {
+    "rows": 242937,
+    "cols": 4,
+    "path": "data\\processed\\mart_payment_onset.parquet"
+  },
+  "stg_suppression": {
+    "rows": 4129857,
+    "cols": 14,
+    "path": "data\\processed\\stg_suppression.parquet"
+  },
+  "sfa_crosscheck": {
+    "spearman": 0.8494,
+    "n": 20000
+  },
+  "disagreement": {
+    "n_hcps": 267171,
+    "exact_agreement": 44248,
+    "exact_agreement_pct": 0.1656,
+    "within_one_decile_pct": 0.4062,
+    "disagree_by_2plus_pct": 0.5938,
+    "volume_low_opportunity_high": 23615,
+    "volume_high_opportunity_low": 26580
+  },
+  "disagreement_matrix": {
+    "rows": 100,
+    "cols": 5,
+    "path": "data\\processed\\disagreement_matrix.parquet"
+  },
+  "top_driver": {
+    "feature": "log_non_class_clms",
+    "share": 0.3241,
+    "method": "permutation"
+  },
+  "shap_drivers": {
+    "rows": 23,
+    "cols": 4,
+    "path": "data\\processed\\shap_drivers.parquet"
+  },
+  "hcp_scored": {
+    "rows": 4129857,
+    "cols": 44,
+    "path": "data\\processed\\hcp_scored.parquet"
+  },
+  "hcp_call_plan": {
+    "rows": 1380665,
+    "cols": 50,
+    "path": "data\\processed\\hcp_call_plan.parquet"
+  },
+  "call_plan_matrix": {
+    "rows": 9,
+    "cols": 8,
+    "path": "data\\processed\\call_plan_matrix.parquet"
+  },
+  "reach_curve": {
+    "rows": 180,
+    "cols": 6,
+    "path": "data\\processed\\reach_curve.parquet"
+  },
+  "headline_h2": {
+    "n_reps": 60,
+    "monthly_call_budget": 9600.0,
+    "avg_calls_per_target": 1.14,
+    "hcps_reachable": 8390,
+    "universe": 1380665,
+    "opportunity_pct_opportunity": 0.0687,
+    "opportunity_pct_class_volume": 0.0911,
+    "volume_pct_opportunity": 0.0322,
+    "volume_pct_class_volume": 0.2417,
+    "geography_pct_opportunity": 0.0062,
+    "geography_pct_class_volume": 0.0062,
+    "lift_vs_geography_pp": 6.2,
+    "lift_vs_volume_pp": 3.6
+  },
+  "call_plan": {
+    "n_targets": 8389,
+    "n_universe": 1380665,
+    "n_in_market": 267171,
+    "pct_of_market_served": 0.0314,
+    "monthly_calls": 9598.2,
+    "capacity_utilisation": 0.9998,
+    "demand_hcps": 106869,
+    "demand_calls": 92605.0,
+    "implied_reps": 578.8,
+    "current_reps": 60
+  },
+  "backtest_lift_opportunity": {
+    "spearman": 0.9273,
+    "top_decile_growth": 40.881894547363686,
+    "bottom_decile_growth": 7.81704044325506
+  },
+  "backtest_lift_volume": {
+    "spearman": 1.0,
+    "top_decile_growth": 52.182096822541965,
+    "bottom_decile_growth": 2.8593582481085806
+  },
+  "backtest_head_to_head": {
+    "n_budget": 53056,
+    "universe": 265283,
+    "total_positive_growth": 6901973.800000002,
+    "total_positive_share_growth": 16330.518554231588,
+    "opportunity_growth_captured": 2468932.7,
+    "opportunity_pct_of_growth": 0.3577,
+    "opportunity_growth_per_hcp": 46.534,
+    "opportunity_share_growth_captured": 3366.6089364106597,
+    "opportunity_pct_of_share_growth": 0.2062,
+    "opportunity_mean_share_growth": 0.04534,
+    "opportunity_median_base_fills": 312.4,
+    "volume_growth_captured": 3401929.0,
+    "volume_pct_of_growth": 0.4929,
+    "volume_growth_per_hcp": 64.12,
+    "volume_share_growth_captured": 2419.3945522907934,
+    "volume_pct_of_share_growth": 0.1482,
+    "volume_mean_share_growth": 0.03363,
+    "volume_median_base_fills": 514.6,
+    "opportunity_vs_volume_ratio": 0.726,
+    "opportunity_vs_volume_share_ratio": 1.392
+  },
+  "backtest_matched": {
+    "computable": true,
+    "n_strata": 20,
+    "flagged_mean_growth": 25.841,
+    "control_mean_growth": 17.227,
+    "growth_ratio": 1.5,
+    "absolute_difference": 8.614
+  },
+  "backtest_misses": {
+    "rows": 50,
+    "cols": 11,
+    "path": "data\\processed\\backtest_misses.parquet"
+  },
+  "gate_g3": {
+    "gate": "G3",
+    "passed": true,
+    "decile_spearman": 0.927,
+    "share_growth_ratio": 1.392,
+    "absolute_growth_ratio": 0.726,
+    "matched_growth_ratio": 1.5,
+    "median_base_fills": 312.4,
+    "base_ratio_vs_volume": 0.607,
+    "conditions": {
+      "orders_correctly": true,
+      "beats_volume_on_share": true,
+      "not_gamed_by_small_base": true
+    },
+    "criterion": "Spearman >= 0.60 AND share-growth capture >= 1.05x volume AND median base volume of the selected list >= 25% of the volume rule's (anti-gaming guard)",
+    "note": "Absolute-growth capture is reported but is NOT a pass condition. Volume ranking wins it mechanically, and with no call data in the holdout the back-test cannot separate captured growth from growth that would have occurred regardless."
+  },
+  "backtest_decile_lift": {
+    "rows": 20,
+    "cols": 7,
+    "path": "data\\processed\\backtest_decile_lift.parquet"
+  },
+  "backtest_frame": {
+    "rows": 265283,
+    "cols": 8,
+    "path": "data\\processed\\backtest_frame.parquet"
+  },
+  "headline_h3": {
+    "current_n_reps": 60,
+    "break_even_n_reps": 586.2,
+    "rep_gap": 526,
+    "marginal_roi_at_current": 10.771,
+    "roi_at_current": 18.5,
+    "contribution_at_current": 277503213.0,
+    "contribution_at_break_even": 920971616.0,
+    "incremental_profit": 511968403.0,
+    "sensitivity_low": 471.1,
+    "sensitivity_high": 700.0,
+    "label": "SCENARIO -- depends on the fitted response curve, not observed calls"
+  },
+  "sizing_roi_curve": {
+    "rows": 68,
+    "cols": 12,
+    "path": "data\\processed\\sizing_roi_curve.parquet"
+  },
+  "sizing_tornado": {
+    "rows": 7,
+    "cols": 9,
+    "path": "data\\processed\\sizing_tornado.parquet"
+  },
+  "sizing_pnl": {
+    "rows": 2,
+    "cols": 10,
+    "path": "data\\processed\\sizing_pnl.parquet"
+  },
+  "challenger_results": {
+    "rows": 4,
+    "cols": 8,
+    "path": "data\\processed\\challenger_results.parquet"
+  },
+  "challenger": {
+    "n_budget": 8399,
+    "winner": "ml_share",
+    "champion_share_capture": 0.0238,
+    "winner_share_capture": 0.1168,
+    "margin_pp": 9.3,
+    "results": [
+      {
+        "rule": "ml_share",
+        "abs_capture": 0.0195,
+        "share_capture": 0.1168,
+        "mean_share_growth": 0.22715,
+        "spearman_decile_growth": 0.6727,
+        "mean_base_class_fills": 39.1,
+        "median_base_class_fills": 34.7,
+        "total_base_class_fills": 328277.95752528455
+      },
+      {
+        "rule": "opportunity",
+        "abs_capture": 0.1027,
+        "share_capture": 0.0238,
+        "mean_share_growth": 0.02076,
+        "spearman_decile_growth": 0.9273,
+        "mean_base_class_fills": 1046.9,
+        "median_base_class_fills": 840.1,
+        "total_base_class_fills": 8793003.01699046
+      },
+      {
+        "rule": "ml_abs",
+        "abs_capture": 0.149,
+        "share_capture": 0.0215,
+        "mean_share_growth": 0.02207,
+        "spearman_decile_growth": 1.0,
+        "mean_base_class_fills": 1226.6,
+        "median_base_class_fills": 1052.5,
+        "total_base_class_fills": 10302464.153611457
+      },
+      {
+        "rule": "volume",
+        "abs_capture": 0.1604,
+        "share_capture": 0.017,
+        "mean_share_growth": 0.02692,
+        "spearman_decile_growth": 1.0,
+        "mean_base_class_fills": 1721.1,
+        "median_base_class_fills": 1469.7,
+        "total_base_class_fills": 14455595.787182592
+      }
+    ]
+  },
+  "challenger_verdict": {
+    "metric_gamed": true,
+    "winner_median_base": 34.7,
+    "champion_median_base": 840.1,
+    "note": "share-capture win driven by small denominators, not persuadability"
+  },
+  "territory_stats": {
+    "rows": 6,
+    "cols": 14,
+    "path": "data\\processed\\territory_stats.parquet"
+  },
+  "territory_assignments": {
+    "rows": 5376,
+    "cols": 14,
+    "path": "data\\processed\\territory_assignments.parquet"
+  },
+  "territory_summary": {
+    "rows": 360,
+    "cols": 11,
+    "path": "data\\processed\\territory_summary.parquet"
+  },
+  "territory_headline": {
+    "n_reps": 60,
+    "imbalance_before": 157.17,
+    "imbalance_after": 2.51,
+    "cv_before": 0.6775,
+    "cv_after": 0.1158,
+    "contiguity_before": 0.2,
+    "contiguity_after": 1.0,
+    "travel_before": 312.98,
+    "travel_after": 77.71,
+    "travel_reduction_pct": 0.7517
+  },
+  "segmentation_diagnostics": {
+    "rows": 6,
+    "cols": 6,
+    "path": "data\\processed\\segmentation_diagnostics.parquet"
+  },
+  "segment_profiles": {
+    "rows": 8,
+    "cols": 12,
+    "path": "data\\processed\\segment_profiles.parquet"
+  },
+  "hcp_segments": {
+    "rows": 1591964,
+    "cols": 10,
+    "path": "data\\processed\\hcp_segments.parquet"
+  },
+  "segmentation": {
+    "k": 8,
+    "silhouette": 0.8074,
+    "stability_ari": 0.9981,
+    "segments": [
+      "Untapped Potential",
+      "Loyal Advocates",
+      "Generic Anchors",
+      "Low-Value Tail",
+      "Rising Switchers",
+      "Segment 5",
+      "Eroding Base",
+      "Segment 7"
+    ]
+  },
+  "response_naive_ols": {
+    "elasticity": 0.06107,
+    "se": 0.00218,
+    "ci_low": 0.05681,
+    "ci_high": 0.06534,
+    "n": 182949
+  },
+  "response_pretrend": {
+    "computable": true,
+    "treated_pre_delta": 0.01286,
+    "control_pre_delta": 0.00536,
+    "difference": 0.0075,
+    "t_stat": 12.251,
+    "p_value": 0.0,
+    "parallel_trends_holds": false,
+    "smd": 0.0902
+  },
+  "response_matching": {
+    "n_pairs": 23850,
+    "worst_smd_after": 0.0347,
+    "balanced": true
+  },
+  "response_did": {
+    "computable": true,
+    "did_estimate": 0.00209,
+    "cluster_se": 0.00799,
+    "ci_low": -0.01356,
+    "ci_high": 0.01775,
+    "n_clusters": 53,
+    "n_matched": 47700,
+    "interpretation": "ASSOCIATION ONLY -- pre-trend test failed"
+  },
+  "response_saturation": {
+    "rows": 80,
+    "cols": 4,
+    "path": "data\\processed\\response_saturation.parquet"
+  },
+  "response_balance": {
+    "rows": 5,
+    "cols": 3,
+    "path": "data\\processed\\response_balance.parquet"
+  }
+}

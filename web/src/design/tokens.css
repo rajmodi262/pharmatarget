@@ -1,0 +1,253 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ========================================================================== */
+/*  PHARMATARGET DESIGN TOKENS                                                */
+/*                                                                            */
+/*  Two chassis, six act accents, two decile ramps. Nothing in a component     */
+/*  may hard-code a colour, a duration or a type size -- if a value is worth   */
+/*  using twice it is named here.                                             */
+/* ========================================================================== */
+
+:root {
+  /* ---- Story chassis (dark) --------------------------------------------- */
+  /* Blue-black, not pure black: #000 makes type edges shimmer on OLED and
+     reads as cheap. This holds. */
+  --void: #06080b;
+  --ground: #0a0e14;
+  --surface: #10161f;
+  --surface-2: #18202b;
+  --hairline: #1f2937;
+  --hairline-hi: #2e3b4e;
+
+  --text-hi: #f2f6fa;
+  --text: #c8d3e0;
+  --text-mute: #7c8a9c;
+  --text-faint: #4a5768;
+
+  /* ---- Tool chassis (light) -- "chart paper" ---------------------------- */
+  --paper: #fbfcfd;
+  --panel: #ffffff;
+  --rule: #e1e7ee;
+  --rule-soft: #f1f5f9;
+  --ink: #101b2b;
+  --ink-mute: #5d6b7e;
+  --ink-faint: #94a3b4;
+  --signal: #0057c7;
+  --flag: #c2410c;
+
+  /* ---- Semantic. NEVER art-directed. A warning looks like a warning in
+     every act, or it is not a warning. ------------------------------------ */
+  --pos: #17a673;
+  --neg: #c2410c;
+  --warn: #b45309;
+  --info: #2563eb;
+
+  /* ---- The live act accent. Story mode transitions THESE THREE, which is
+     why every accent-coloured element shifts together in one cross-fade
+     instead of needing a class swap per node. ----------------------------- */
+  --accent-core: #1e5fd9;
+  --accent-glow: #5b9bff;
+  --accent-wash: rgba(30, 95, 217, 0.1);
+  transition: --accent-core 900ms, --accent-glow 900ms, --accent-wash 900ms;
+
+  /* ---- Act accent worlds ------------------------------------------------ */
+  /* ACT 1 NOISE -- cold, inert, unresolved */
+  --a1-core: #4c7a8c;  --a1-glow: #7fd4ee;  --a1-wash: rgba(76, 122, 140, 0.08);
+  /* ACT 2 OPPORTUNITY -- the signal appears */
+  --a2-core: #1e5fd9;  --a2-glow: #5b9bff;  --a2-wash: rgba(30, 95, 217, 0.1);
+  /* ACT 3 DISAGREEMENT -- two views in tension */
+  --a3-core: #7b4dd8;  --a3-glow: #a98bff;  --a3-wash: rgba(123, 77, 216, 0.1);
+  --a3-alt: #c77a22;   --a3-alt-glow: #f0b45c;
+  /* ACT 4 PROOF -- validation */
+  --a4-core: #0f8f6b;  --a4-glow: #45d9a8;  --a4-wash: rgba(15, 143, 107, 0.1);
+  /* ACT 5 MONEY -- warm, material */
+  --a5-core: #b8862b;  --a5-glow: #f2c56b;  --a5-wash: rgba(184, 134, 43, 0.1);
+  /* ACT 6 TERRITORY -- spatial */
+  --a6-core: #d14a6a;  --a6-glow: #ff89a3;  --a6-wash: rgba(209, 74, 106, 0.1);
+  /* ACT 7 LEDGER -- deliberately colourless. The absence reads as candour. */
+
+  /* ---- Decile ramps ----------------------------------------------------- */
+  /* OPPORTUNITY: chromatic and alive. The ranking this project argues FOR. */
+  --d1: #eef3f8;  --d2: #dce6f1;  --d3: #c4d6ea;  --d4: #a6c2e0;  --d5: #83aad4;
+  --d6: #5f91c7;  --d7: #4176b4;  --d8: #2a5c9b;  --d9: #17437b;  --d10: #0a2c5c;
+
+  /* VOLUME: neutral and inert. The industry default this project argues
+     AGAINST. Two ramps is rhetoric -- the viewer absorbs the argument before
+     reading a word. It also guarantees colour-blind safety, which is the
+     functional justification for the same choice. NEVER give volume a hue. */
+  --v1: #f5f5f4;  --v2: #e7e5e4;  --v3: #d6d3d1;  --v4: #bfbbb8;  --v5: #a8a29e;
+  --v6: #8c8681;  --v7: #736d68;  --v8: #57514d;  --v9: #3d3835;  --v10: #26221f;
+
+  /* ---- Type ------------------------------------------------------------- */
+  /* Self-host the woff2 files into /public/fonts and add @font-face to pick
+     them up. The fallbacks are chosen to be genuinely usable, not filler:
+     Iowan/Georgia carry real contrast, so the display voice survives even if
+     the webfont never loads. */
+  --font-display: "Instrument Serif", "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --font-ui: "Inter Tight", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --t-hero: clamp(2.75rem, 7vw, 6.5rem);
+  --t-claim: clamp(1.75rem, 3.4vw, 3rem);
+  --t-h1: clamp(1.6rem, 2.4vw, 2.25rem);
+  --t-h2: clamp(1.25rem, 1.7vw, 1.5rem);
+  --t-h3: 1.0625rem;
+  --t-body: 0.9375rem; /* 15px -- denser than default, on purpose */
+  --t-small: 0.8125rem;
+  --t-micro: 0.6875rem;
+
+  --gutter: clamp(16px, 4vw, 64px);
+  --rail: 220px;
+
+  color-scheme: light;
+}
+
+@property --accent-core { syntax: "<color>"; inherits: true; initial-value: #1e5fd9; }
+@property --accent-glow { syntax: "<color>"; inherits: true; initial-value: #5b9bff; }
+
+/* Story mode flips the chassis. Applied to <html> so the transition covers
+   every descendant at once -- this is the mode transition in §7.9. */
+[data-mode="story"] {
+  color-scheme: dark;
+  --paper: var(--ground);
+  --panel: var(--surface);
+  --rule: var(--hairline);
+  --rule-soft: var(--surface-2);
+  --ink: var(--text-hi);
+  --ink-mute: var(--text-mute);
+  --ink-faint: var(--text-faint);
+  --signal: var(--accent-core);
+}
+
+/* ========================================================================== */
+/*  BASE                                                                      */
+/* ========================================================================== */
+
+@layer base {
+  * { box-sizing: border-box; }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: var(--t-body);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 500ms cubic-bezier(0.65, 0, 0.35, 1),
+                color 500ms cubic-bezier(0.65, 0, 0.35, 1);
+  }
+
+  /* THE MONO-NUMERALS RULE. Every digit in the product is monospaced with
+     tabular figures: columns align without effort, digits stop shifting during
+     transitions, and the whole thing reads as an instrument readout rather
+     than a web page. An NPI *is* an identifier and should look like one. */
+  .num, .npi, td.n, th.n, .kpi-value, .axis-tick, code, kbd {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1, "zero" 1;
+  }
+
+  h1, h2, h3, h4 {
+    margin: 0;
+    font-weight: 600;
+    text-wrap: balance;
+  }
+
+  p { text-wrap: pretty; }
+
+  a {
+    color: var(--signal);
+    text-underline-offset: 2px;
+  }
+
+  /* Visible focus is an accessibility requirement, not a style choice.
+     :focus-visible so pointer users never see a ring they did not ask for. */
+  :focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: var(--accent-core);
+    color: #fff;
+  }
+
+  /* Scrollbars: present but quiet. */
+  * { scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb {
+    background: var(--rule);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 8px;
+  }
+  *::-webkit-scrollbar-thumb:hover { background-color: var(--ink-faint); }
+}
+
+/* ========================================================================== */
+/*  COMPONENT PRIMITIVES                                                      */
+/* ========================================================================== */
+
+@layer components {
+  /* Tool surfaces carry NO shadow. Shadows on a data tool read as consumer
+     software; the hairline is the structural device instead. */
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+  }
+
+  .eyebrow {
+    font-size: var(--t-micro);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    font-weight: 500;
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--rule-soft) 25%,
+      var(--rule) 50%,
+      var(--rule-soft) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+    border-radius: 4px;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+}
+
+/* ========================================================================== */
+/*  REDUCED MOTION                                                            */
+/*                                                                            */
+/*  Mandatory. The narrative must remain fully comprehensible with zero        */
+/*  motion -- which is both an accessibility requirement and a real test of    */
+/*  whether the story works or is merely moving.                              */
+/* ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .skeleton { animation: none; background: var(--rule-soft); }
+}
