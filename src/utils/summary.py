@@ -113,10 +113,19 @@ def render() -> str:
 
     h3 = m.get("headline_h3") or {}
     if h3:
-        out.append(f"    sizing (SCENARIO)    break-even {_num(h3.get('break_even_n_reps'))} reps "
-                   f"vs {_num(h3.get('current_n_reps'))} today "
-                   f"(sensitivity {_num(h3.get('sensitivity_low'))}-"
-                   f"{_num(h3.get('sensitivity_high'))})")
+        # Recommendation first, diagnostic second and clearly labelled. The
+        # uncapped break-even is a real output but is not a hiring plan, and
+        # leading with it implies the response curve is carrying the result.
+        out.append(f"    sizing RECOMMEND     +{_num(h3.get('recommended_add'))} reps "
+                   f"({_num(h3.get('current_n_reps'))} -> {_num(h3.get('recommended_n_reps'))}), "
+                   f"worth {_num(h3.get('incremental_profit'))} contribution; "
+                   f"marginal rep still {h3.get('marginal_roi_at_recommended','--')}x")
+        if h3.get("recommendation_capped"):
+            out.append(f"      diagnostic (not an ask): economics bind at "
+                       f"{_num(h3.get('break_even_n_reps'))} reps "
+                       f"(sensitivity {_num(h3.get('sensitivity_low'))}-"
+                       f"{_num(h3.get('sensitivity_high'))}); "
+                       f"{_num(h3.get('unmet_demand_reps'))} reps of unmet demand")
 
     t = m.get("territory_headline") or {}
     if t:
