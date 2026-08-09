@@ -43,6 +43,12 @@ import pandas as pd
 from src.config import ROOT, params
 from src.utils.geo import STATE_CENTROIDS, census_region
 from src.utils.io import claim_raw_dir, get_logger, record
+from src.utils.schema import (
+    PARTD_DRUG_COLUMNS,
+    PARTD_PROVIDER_COLUMNS,
+    ZIP3_UNIT_COLUMNS,
+    require_columns,
+)
 
 log = get_logger(__name__)
 
@@ -402,6 +408,9 @@ def generate(n_prescribers: int = 40_000, n_units: int = 620, seed: int = 42,
     drug_rows, true_totals = _explode_to_drug_rows(rng, panel, pres)
 
     # --- D1: Part D by Provider and Drug ------------------------------------
+    require_columns(drug_rows, PARTD_DRUG_COLUMNS,
+                    produced_by="synth.py (synthetic drug file)",
+                    consumed_by="src/sql/02_stg_scripts.sql")
     for year in yrs:
         sub = drug_rows[drug_rows["year"] == year].drop(columns="year")
         sub.to_csv(RAW / f"partd_drug_{year}.csv", index=False)
@@ -446,6 +455,13 @@ def generate(n_prescribers: int = 40_000, n_units: int = 620, seed: int = 42,
             "Prscrbr_RUCA": rng.choice([1.0, 2.0, 4.0, 7.0, 10.0], size=len(pres)),
             "Tot_Drug_Cst": (pres["npi"].map(tt).fillna(0) * rng.uniform(40, 90, len(pres))).round(2),
         })
+        # These must be the REAL CMS column names. An invented convenience
+        # column here validates the pipeline against a world that isn't there --
+        # which is exactly how `Bene_Age_GE_65_Cnt` shipped and broke the first
+        # real extract.
+        require_columns(prov, PARTD_PROVIDER_COLUMNS,
+                        produced_by="synth.py (synthetic provider file)",
+                        consumed_by="src/sql/01_stg_prescribers.sql")
         prov.to_csv(RAW / f"partd_provider_{year}.csv", index=False)
         log.info("  partd_provider_%d.csv     %8d rows", year, len(prov))
 
@@ -469,6 +485,11 @@ def generate(n_prescribers: int = 40_000, n_units: int = 620, seed: int = 42,
         log.info("  open_payments_%d.csv      %8d rows", year, len(sub))
 
     # --- D4/D5/D6: geography + market covariates ----------------------------
+    # Same contract geo_build.py satisfies. Validated here rather than trusted:
+    # this exact table has drifted between the two paths twice already.
+    require_columns(units, ZIP3_UNIT_COLUMNS,
+                    produced_by="synth.py (synthetic geography)",
+                    consumed_by="SQL 04 and src/models/territory.py")
     units.to_csv(RAW / "zip3_units.csv", index=False)
     log.info("  zip3_units.csv           %8d rows", len(units))
 

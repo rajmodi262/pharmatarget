@@ -48,6 +48,7 @@ import pandas as pd
 from src.config import ROOT
 from src.utils.geo import census_region
 from src.utils.io import get_logger, record, write_parquet
+from src.utils.schema import ZIP3_UNIT_COLUMNS, require_columns
 
 log = get_logger(__name__)
 
@@ -299,6 +300,12 @@ def run(local_dir: Path) -> pd.DataFrame:
                     "practice size -- check the SHAP output against gate G2.")
 
     units = attach_state(build_zip3(gaz, places))
+
+    # Both ingest paths must produce identical columns here -- SQL 04 joins this
+    # table by name and cannot tell which one wrote it. See src/utils/schema.py.
+    require_columns(units, ZIP3_UNIT_COLUMNS,
+                    produced_by="geo_build.py (real geography)",
+                    consumed_by="SQL 04 and src/models/territory.py")
 
     RAW.mkdir(parents=True, exist_ok=True)
     out_csv = RAW / "zip3_units.csv"
