@@ -1,3 +1,5 @@
+@import "./fonts.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -24,7 +26,7 @@
   --text-hi: #f2f6fa;
   --text: #c8d3e0;
   --text-mute: #7c8a9c;
-  --text-faint: #4a5768;
+  --text-faint: #75859A;
 
   /* ---- Tool chassis (light) -- "chart paper" ---------------------------- */
   --paper: #fbfcfd;
@@ -81,10 +83,10 @@
   --v6: #8c8681;  --v7: #736d68;  --v8: #57514d;  --v9: #3d3835;  --v10: #26221f;
 
   /* ---- Type ------------------------------------------------------------- */
-  /* Self-host the woff2 files into /public/fonts and add @font-face to pick
-     them up. The fallbacks are chosen to be genuinely usable, not filler:
-     Iowan/Georgia carry real contrast, so the display voice survives even if
-     the webfont never loads. */
+  /* Self-hosted from /public/fonts (see fonts.css) -- 196 KB, Latin only.
+     The fallbacks are chosen to be genuinely usable rather than filler:
+     Iowan/Georgia carry real contrast, so the display voice survives if the
+     webfont is still in flight on first paint. */
   --font-display: "Instrument Serif", "Iowan Old Style", Georgia, "Times New Roman", serif;
   --font-ui: "Inter Tight", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -251,3 +253,4 @@
   }
   .skeleton { animation: none; background: var(--rule-soft); }
 }
+

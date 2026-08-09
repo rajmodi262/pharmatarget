@@ -66,42 +66,121 @@ function useReducedMotion() {
   return reduced;
 }
 
-/** Which act is on stage, and how far through it we are. */
+/** Which act is on stage, and how far through it we are.
+ *
+ * Driven by getBoundingClientRect() on a rAF loop, NOT by window.scrollY.
+ *
+ * The scrollY version worked on a plain page and silently did nothing the
+ * moment anything other than the window was the scrolling element -- an
+ * embedded pane, an iframe, a wrapper with overflow, or a browser doing
+ * scroll containment. The page rendered, the canvas drew, and the acts simply
+ * never advanced, which is the worst kind of bug: it looks like a design
+ * choice.
+ *
+ * rect.top is relative to the viewport, so it is correct regardless of which
+ * element actually scrolls. The loop costs one rect read per frame and only
+ * commits state when the value moves enough to matter, so React re-renders at
+ * roughly the rate the copy actually changes rather than 60 times a second.
+ */
 function useScrollStage(count: number) {
   const [state, setState] = useState({ index: 0, progress: 0 });
   const ref = useRef<HTMLDivElement>(null);
+  const last = useRef({ index: -1, progress: -1 });
+  // While a keyboard/click jump is settling, scroll must not fight it.
+  const overrideUntil = useRef(0);
 
   useEffect(() => {
     let raf = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const el = ref.current;
-        if (!el) return;
-        const top = el.offsetTop;
-        const total = el.scrollHeight - window.innerHeight;
-        const p = Math.min(Math.max((window.scrollY - top) / Math.max(total, 1), 0), 1);
+    let alive = true;
+
+    const tick = () => {
+      if (!alive) return;
+      const el = ref.current;
+      if (el && performance.now() > overrideUntil.current) {
+        const rect = el.getBoundingClientRect();
+        const scrollable = rect.height - window.innerHeight;
+        const travelled = -rect.top;
+        const p = Math.min(Math.max(travelled / Math.max(scrollable, 1), 0), 1);
+
         const raw = p * count;
-        setState({
-          index: Math.min(count - 1, Math.floor(raw)),
-          progress: raw - Math.floor(raw),
-        });
-      });
+        const index = Math.min(count - 1, Math.max(0, Math.floor(raw)));
+        const progress = raw - Math.floor(raw);
+
+        // Commit only on a real change: a new act, or >0.5% of an act's scroll.
+        if (index !== last.current.index ||
+            Math.abs(progress - last.current.progress) > 0.005) {
+          last.current = { index, progress };
+          setState({ index, progress });
+        }
+      }
+      raf = requestAnimationFrame(tick);
     };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => { window.removeEventListener("scroll", onScroll); cancelAnimationFrame(raf); };
+
+    raf = requestAnimationFrame(tick);
+    return () => { alive = false; cancelAnimationFrame(raf); };
   }, [count]);
 
-  return { ref, ...state };
+  /**
+   * Jump to an act directly.
+   *
+   * The narrative must NOT depend solely on scrolling. Two reasons, and the
+   * second is the one that matters:
+   *
+   *   - Accessibility. A keyboard user cannot drive a seven-act scroll
+   *     narrative with the tab key. Without this the story is simply
+   *     unavailable to them, which no amount of ARIA fixes.
+   *   - Robustness. Embedded panes, kiosk modes and some presentation setups
+   *     refuse programmatic scrolling outright. A story that only advances on
+   *     scroll silently shows act one forever in those contexts.
+   *
+   * So the act index is state that scroll SYNCS TO, rather than state scroll
+   * OWNS. The jump also moves the scroll position so the two agree once the
+   * override lapses.
+   */
+  const goTo = (next: number) => {
+    const index = Math.min(count - 1, Math.max(0, next));
+    last.current = { index, progress: 0.5 };
+    setState({ index, progress: 0.5 });
+    overrideUntil.current = performance.now() + 900;
+
+    const el = ref.current;
+    if (el) {
+      const scrollable = el.scrollHeight - window.innerHeight;
+      const target = el.offsetTop + (scrollable * (index + 0.5)) / count;
+      window.scrollTo({ top: target, behavior: "smooth" });
+    }
+  };
+
+  return { ref, goTo, ...state };
 }
 
 /* ------------------------------------------------------------------ page */
 
 export function Story() {
   const reduced = useReducedMotion();
-  const { ref, index, progress } = useScrollStage(ACTS.length);
+  const { ref, goTo, index, progress } = useScrollStage(ACTS.length);
   const act = ACTS[index] ?? ACTS[0]!;
+
+  // Keyboard navigation. Without this the story is unreachable for anyone who
+  // cannot scroll -- and it makes the deck presentable from a clicker.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      switch (e.key) {
+        case "ArrowRight": case "ArrowDown": case "PageDown": case " ":
+          e.preventDefault(); goTo(index + 1); break;
+        case "ArrowLeft": case "ArrowUp": case "PageUp":
+          e.preventDefault(); goTo(index - 1); break;
+        case "Home":
+          e.preventDefault(); goTo(0); break;
+        case "End":
+          e.preventDefault(); goTo(ACTS.length - 1); break;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [index, goTo]);
 
   const summary = useQuery({ queryKey: qk.summary, queryFn: api.summary });
   const meta = useQuery({ queryKey: qk.meta, queryFn: api.meta });
@@ -289,8 +368,20 @@ export function Story() {
           </div>
 
           <ScrollHint visible={index === 0 && progress < 0.12} />
-          <ActProgress index={index} progress={progress} />
+          <ActProgress index={index} progress={progress} onJump={goTo} />
         </div>
+      </div>
+
+      {/* The full narrative in DOM order, for screen readers and for anyone
+          who would rather read seven paragraphs than scroll seven screens.
+          The visual layer is one act at a time; the document is not. */}
+      <div className="sr-only">
+        <h1>PharmaTarget — the argument in full</h1>
+        {ACTS.map((a, i) => (
+          <section key={a.id} aria-label={`Act ${i + 1}: ${a.eyebrow}`}>
+            <h2>{a.eyebrow}</h2>
+          </section>
+        ))}
       </div>
     </div>
   );
@@ -332,7 +423,7 @@ function ActCopy({ head, body, stats, caveat, note }: {
         </p>
       )}
       {note && (
-        <p className="mt-4 text-[11px] text-[#4A5768]">{note}</p>
+        <p className="mt-4 text-[11px] text-[#75859A]">{note}</p>
       )}
     </div>
   );
@@ -345,7 +436,7 @@ function StoryNav({ index }: { index: number }) {
         PharmaTarget
       </span>
       <div className="flex items-center gap-4">
-        <span className="num text-[11px] text-[#4A5768]">
+        <span className="num text-[11px] text-[#75859A]">
           {String(index + 1).padStart(2, "0")} / {String(ACTS.length).padStart(2, "0")}
         </span>
         <Link
@@ -359,32 +450,52 @@ function StoryNav({ index }: { index: number }) {
   );
 }
 
-function ActProgress({ index, progress }: { index: number; progress: number }) {
+function ActProgress({ index, progress, onJump }: {
+  index: number;
+  progress: number;
+  onJump: (i: number) => void;
+}) {
   return (
-    <div className="pointer-events-none absolute bottom-8 left-6 right-6 flex gap-1.5">
+    <nav
+      aria-label="Acts"
+      className="absolute bottom-6 left-6 right-6 flex gap-1.5"
+    >
       {ACTS.map((a, i) => (
-        <div key={a.id} className="h-px flex-1 overflow-hidden bg-[#1F2937]">
-          <div
-            className="h-full"
-            style={{
-              width: i < index ? "100%" : i === index ? `${progress * 100}%` : "0%",
-              background: "var(--glow)",
-              transition: "width 120ms linear",
-            }}
-          />
-        </div>
+        <button
+          key={a.id}
+          type="button"
+          onClick={() => onJump(i)}
+          aria-label={`Act ${i + 1} of ${ACTS.length}: ${a.eyebrow}`}
+          aria-current={i === index ? "step" : undefined}
+          // A 1px rule is an unusable target. The hit area is transparent and
+          // generous -- 44px on touch, per WCAG 2.5.5, and 20px with a mouse
+          // where precision is cheap. Only the rule inside it is ever visible.
+          className="group relative h-11 flex-1 cursor-pointer bg-transparent p-0 sm:h-5"
+        >
+          <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 overflow-hidden bg-[#1F2937] transition-all duration-150 group-hover:h-[3px]">
+            <span
+              className="block h-full"
+              style={{
+                width: i < index ? "100%" : i === index ? `${progress * 100}%` : "0%",
+                background: "var(--glow)",
+                transition: "width 120ms linear",
+              }}
+            />
+          </span>
+        </button>
       ))}
-    </div>
+    </nav>
   );
 }
 
 function ScrollHint({ visible }: { visible: boolean }) {
   return (
     <div
-      className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 text-[11px] uppercase tracking-[0.2em] text-[#4A5768]"
+      className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 text-[11px] uppercase tracking-[0.2em] text-[#75859A]"
       style={{ opacity: visible ? 1 : 0, transition: "opacity 400ms" }}
     >
       Scroll
     </div>
   );
 }
+
