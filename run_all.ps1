@@ -234,6 +234,11 @@ Invoke-Stage -Name "response" `
 # 4. quality
 # --------------------------------------------------------------------------- #
 
+Invoke-Stage -Name "robustness" `
+    -Command "$Python -m src.models.robustness" `
+    -Artifact "$P\robustness_bootstrap.parquet" `
+    -Sources @("src\models\robustness.py", "$P\backtest_frame.parquet")
+
 # Gates G2 and G4 are evaluated by src/pipeline.py, which run_all.ps1 does not
 # call -- it runs each module directly so stages stay independently resumable.
 # Without this, only G3 (recorded inside backtest.py) ever reaches the manifest,

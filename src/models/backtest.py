@@ -357,8 +357,13 @@ def run() -> dict:
 
     write_parquet(lift, proc / "backtest_decile_lift.parquet")
     write_parquet(misses, proc / "backtest_misses.parquet")
+    # share_growth and brand_share are persisted because robustness.py bootstraps
+    # the SHARE-growth ratio, which is the gate's actual criterion. Omitting them
+    # meant the headline metric silently got no confidence interval while the
+    # secondary one did.
     write_parquet(df[["npi", "opportunity", "opportunity_decile", "volume_decile",
-                      "class_fills", "brand_fills", "brand_growth_abs", "flagged"]],
+                      "class_fills", "brand_fills", "brand_share",
+                      "brand_growth_abs", "share_growth", "flagged"]],
                   proc / "backtest_frame.parquet")
 
     return {"lift": lift, "head_to_head": h2h, "matched": matched, "verdict": verdict}

@@ -107,9 +107,29 @@ def render() -> str:
         out.append(f"    back-test            Spearman {g3.get('decile_spearman', '--')} | "
                    f"share capture {g3.get('share_growth_ratio', '--')}x | "
                    f"absolute {g3.get('absolute_growth_ratio', '--')}x")
+    # Prefer the propensity-matched figure over the single-variable one: it
+    # controls five covariates instead of one, and it is the number the README
+    # leads with.
+    psm = m.get("propensity_matched") or {}
     matched = m.get("backtest_matched") or {}
-    if matched.get("growth_ratio"):
+    if psm.get("computable"):
+        out.append(f"    vs matched controls  {psm.get('growth_ratio')}x "
+                   f"({_num(psm.get('n_pairs'))} pairs, {psm.get('n_covariates')} covariates, "
+                   f"worst SMD {psm.get('worst_smd_after')})")
+        out.append(f"      paired difference  {psm.get('paired_difference')} fills "
+                   f"[{psm.get('ci_low')}, {psm.get('ci_high')}]")
+    elif matched.get("growth_ratio"):
         out.append(f"    vs matched controls  {matched['growth_ratio']}x faster growth")
+
+    boot = m.get("bootstrap_headlines") or {}
+    if boot.get("share_ratio"):
+        lo, est, hi = boot["share_ratio"]
+        out.append(f"    share capture 95%CI  {est} [{lo}, {hi}]"
+                   f"{'  excludes 1.0' if lo > 1 else '  SPANS 1.0'}")
+    tau = m.get("tau_sensitivity") or {}
+    if tau:
+        out.append(f"    tau sensitivity      rho >= {tau.get('near_band_spearman')} "
+                   f"within +/-0.05, >= {tau.get('far_band_spearman')} across the full grid")
 
     h3 = m.get("headline_h3") or {}
     if h3:

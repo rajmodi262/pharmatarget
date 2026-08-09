@@ -1,8 +1,9 @@
 # PharmaTarget
 
 **Prescribers this model flagged as high-opportunity in 2023 grew branded volume
-1.50× faster in 2024 — a year the model never saw — than volume-matched
-prescribers it did not flag.**
+1.37× faster in 2024 — a year the model never saw — than propensity-matched
+prescribers it did not flag. Paired difference +5.2 fills, 95% CI [4.1, 6.3],
+across 49,864 matched pairs balanced on five covariates (worst SMD 0.041).**
 
 An HCP targeting and territory alignment engine for a branded direct oral
 anticoagulant, built on 29 GB of real Medicare Part D and Open Payments data
@@ -43,10 +44,27 @@ reach, minus what they currently give us.
 Each finding is tagged by what kind of claim it is. Nothing here blurs the line
 between something computed, something validated, and something projected.
 
-**1. The model works out-of-time** · *back-tested*
-Fit on 2022–23, frozen, scored against 2024. Spearman 0.927 between predicted
-decile and realised growth. Flagged prescribers grew **1.50×** faster than
-volume-matched controls. Share-growth capture **1.39×** the volume rule.
+**1. The model works out-of-time, with intervals** · *back-tested*
+Fit on 2022–23, frozen, scored against 2024. Every figure below carries a 95%
+interval from a 400-draw percentile bootstrap over prescribers.
+
+| | Estimate | 95% CI |
+|---|---|---|
+| Share-growth capture vs volume rule | **1.391×** | [1.371, 1.411] — excludes 1.0 |
+| Absolute-growth capture vs volume rule | 0.726× | [0.717, 0.735] — volume wins |
+| Spearman (decile, realised growth) | 0.927 | [0.879, 0.927] |
+| Propensity-matched growth ratio | **1.37×** | paired diff +5.2 [4.1, 6.3] |
+
+The matched figure uses propensity scoring on five covariates with caliper
+matching, not stratification on volume alone. Proper matching *lowers* the
+estimate from 1.50× to 1.37×, which is what better confounder control should do.
+
+**τ is a tuning choice, not the finding.** Refitting the frontier across
+τ ∈ [0.65, 0.90]: within ±0.05 of the chosen 0.80 — the range another analyst
+might reasonably have picked — the ranking correlates **ρ ≥ 0.980** with the
+baseline and retains **≥93%** of the top three deciles. It degrades gracefully
+beyond that, worst case ρ 0.924 at ±0.15. Robust where it matters; no claim of
+invariance.
 
 **2. Volume and opportunity disagree for 59.4% of in-market prescribers** · *arithmetic*
 23,615 are low-volume/high-opportunity — invisible to the volume rule. 26,580

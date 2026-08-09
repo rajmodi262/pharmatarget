@@ -266,7 +266,7 @@
   },
   "backtest_frame": {
     "rows": 265283,
-    "cols": 8,
+    "cols": 10,
     "path": "data\\processed\\backtest_frame.parquet"
   },
   "headline_h3": {
@@ -478,5 +478,89 @@
       "balanced": true
     },
     "criterion": "contiguity >= 0.95 AND workload CV <= 0.2"
+  },
+  "bootstrap_headlines": {
+    "n_boot": 400,
+    "n_budget": 53056,
+    "opportunity_abs": [
+      0.3533,
+      0.3577,
+      0.3625
+    ],
+    "opportunity_share": [
+      0.2035,
+      0.2062,
+      0.2087
+    ],
+    "volume_abs": [
+      0.4884,
+      0.4929,
+      0.4971
+    ],
+    "volume_share": [
+      0.1465,
+      0.1482,
+      0.1498
+    ],
+    "share_ratio": [
+      1.3709,
+      1.3915,
+      1.4109
+    ],
+    "abs_ratio": [
+      0.7167,
+      0.7257,
+      0.7349
+    ],
+    "spearman": [
+      0.8788,
+      0.9273,
+      0.9273
+    ]
+  },
+  "robustness_bootstrap": {
+    "rows": 7,
+    "cols": 6,
+    "path": "data\\processed\\robustness_bootstrap.parquet"
+  },
+  "tau_sensitivity": {
+    "grid": [
+      0.65,
+      0.7,
+      0.75,
+      0.8,
+      0.85,
+      0.9
+    ],
+    "base": 0.8,
+    "near_band_spearman": 0.9801,
+    "near_band_top3_retention": 0.9327,
+    "far_band_spearman": 0.9244,
+    "far_band_top3_retention": 0.8609,
+    "robust_within_near_band": true
+  },
+  "robustness_tau": {
+    "rows": 6,
+    "cols": 5,
+    "path": "data\\processed\\robustness_tau.parquet"
+  },
+  "propensity_matched": {
+    "computable": true,
+    "n_pairs": 49864,
+    "n_covariates": 5,
+    "worst_smd_after": 0.0409,
+    "balanced": true,
+    "flagged_mean_growth": 19.282,
+    "control_mean_growth": 14.075,
+    "growth_ratio": 1.37,
+    "paired_difference": 5.207,
+    "paired_se": 0.564,
+    "ci_low": 4.102,
+    "ci_high": 6.312
+  },
+  "robustness_balance": {
+    "rows": 5,
+    "cols": 3,
+    "path": "data\\processed\\robustness_balance.parquet"
   }
 }
