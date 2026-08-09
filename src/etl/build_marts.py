@@ -29,11 +29,46 @@ def _sql_list(values) -> str:
     return ", ".join("'" + str(v).replace("'", "''") + "'" for v in values)
 
 
+def _alldrug_source() -> str:
+    """SQL producing (npi, year, observed_all_clms), whichever ingest ran.
+
+    See the comment block at the top of 03_suppression_recon.sql. The real path
+    writes a side-car totals file because it discards out-of-class rows while
+    streaming; the synthetic path keeps every drug, so the total is just a sum
+    over stg_scripts. Choosing here -- and saying so in the log -- means neither
+    path silently produces the wrong suppression figure.
+    """
+    totals = sorted(RAW.glob("npi_alldrug_totals_*.csv"))
+    if totals:
+        log.info("all-drug totals: %d side-car file(s) from the streaming ingest", len(totals))
+        return (
+            "SELECT\n"
+            "    CAST(Prscrbr_NPI AS BIGINT)                              AS npi,\n"
+            # Anchored to the FILENAME, not the path. An unanchored (\d{4})
+            # matches the first four digits anywhere in the absolute path, so a
+            # checkout under a directory containing digits silently stamps every
+            # row with the wrong year -- and nothing downstream complains.
+            "    CAST(regexp_extract(filename, '_(\\d{4})\\.csv$', 1) AS INTEGER)  AS year,\n"
+            "    CAST(All_Drug_Tot_Clms_Observed AS DOUBLE)               AS observed_all_clms\n"
+            f"FROM read_csv_auto('{RAW.as_posix()}/npi_alldrug_totals_*.csv',\n"
+            "                   filename = true, union_by_name = true, header = true)"
+        )
+
+    log.info("all-drug totals: no side-car file; summing stg_scripts "
+             "(correct for the synthetic ingest, which keeps every drug)")
+    return (
+        "SELECT npi, year, SUM(tot_clms) AS observed_all_clms\n"
+        "FROM stg_scripts\n"
+        "GROUP BY npi, year"
+    )
+
+
 def _render(sql: str, impute_mode: str) -> str:
     p = params()
     mfg = manufacturers()
     tokens = {
         "{{RAW}}": RAW.as_posix(),
+        "{{ALLDRUG_SOURCE}}": _alldrug_source(),
         "{{FOCUS_GENERICS}}": _sql_list(focus_generic_names()),
         "{{CLASS_GENERICS}}": _sql_list(class_generic_names()),
         "{{IMPUTE_MODE}}": impute_mode,

@@ -12,7 +12,7 @@ CREATE OR REPLACE TABLE stg_prescribers AS
 WITH raw AS (
     SELECT
         *,
-        CAST(regexp_extract(filename, '(\d{4})', 1) AS INTEGER) AS year
+        CAST(regexp_extract(filename, '_(\d{4})\.csv$', 1) AS INTEGER) AS year
     FROM read_csv_auto(
         '{{RAW}}/partd_provider_*.csv',
         filename = true,
@@ -83,3 +83,4 @@ FROM typed
 WHERE npi IS NOT NULL
   AND state IS NOT NULL
   AND LENGTH(state) = 2;
+

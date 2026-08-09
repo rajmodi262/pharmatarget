@@ -142,13 +142,25 @@ def _make_zip3_units(rng: np.random.Generator, n_units: int) -> pd.DataFrame:
         pct_65 = float(np.clip(rng.beta(4.2, 20.0) + 0.06, 0.06, 0.44))
         # Prevalence rises with age structure plus a local idiosyncratic term.
         base = 0.55 * pct_65 + 0.45 * rng.beta(3.0, 9.0)
+        # COLUMN NAMES MUST MATCH src/ingest/geo_build.py EXACTLY.
+        # SQL 04 joins this table by name and does not care which ingest wrote
+        # it. An earlier version emitted `pop_65_plus`/`pct_65_plus` while the
+        # real geography build produced `population`/`pop_density`, so the
+        # synthetic pipeline died in the binder the moment SQL 04 was updated
+        # for real data -- the same schema-drift failure as the invented
+        # Bene_Age_GE_65_Cnt column. Keep these aligned.
+        population = int(rng.lognormal(10.4, 0.85))
+        land = round(float(np.clip(rng.lognormal(4.6, 1.1), 3.0, 6000.0)), 2)
         rows.append({
             "zip3": f"{(i * 7 + 100) % 900 + 100:03d}",
             "state": st,
             "region": census_region(st),
             "lat": round(lat, 4),
             "lon": round(lon, 4),
-            "pop_65_plus": int(rng.lognormal(9.6, 0.85)),
+            "population": population,
+            "land_sqmi": land,
+            "n_zctas": int(rng.integers(3, 60)),
+            "pop_density": round(population / land, 2),
             "pct_65_plus": round(pct_65, 4),
             "prev_stroke": round(float(np.clip(base * 12.0 + rng.normal(0, 0.35), 1.0, 9.5)), 3),
             "prev_chd": round(float(np.clip(base * 18.0 + rng.normal(0, 0.55), 2.0, 15.0)), 3),
@@ -195,7 +207,8 @@ def _make_prescribers(rng: np.random.Generator, n: int, units: pd.DataFrame) -> 
 
 
 def _unit_weights(units: pd.DataFrame) -> np.ndarray:
-    w = units["pop_65_plus"].to_numpy(dtype=float)
+    """Place prescribers in proportion to population -- doctors follow people."""
+    w = units["population"].to_numpy(dtype=float)
     return w / w.sum()
 
 

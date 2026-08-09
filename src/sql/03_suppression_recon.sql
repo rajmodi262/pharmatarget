@@ -40,13 +40,22 @@
 -- A wrong number here does not crash anything. It flows silently into every
 -- imputation mode and every downstream decile. Verified against a standalone
 -- reconciliation query on the raw files before this join was written.
+-- TWO INGEST PATHS, TWO SOURCES FOR THE SAME QUANTITY.
+--
+--   REAL      src/ingest/download.py streams the 4 GB drug file, keeps only
+--             in-class rows, and writes the per-NPI all-drug total to a
+--             separate npi_alldrug_totals_*.csv. stg_scripts therefore holds
+--             class rows ONLY, and summing it here would be wrong.
+--
+--   SYNTHETIC src/ingest/synth.py writes complete drug files including
+--             out-of-class drugs, so the total is simply SUM(stg_scripts) and
+--             no side-car file exists.
+--
+-- build_marts.py picks the correct expression and substitutes it here, logging
+-- which path it took. Hard-coding the real path is what broke CI: the synthetic
+-- smoke test died on a missing file glob, because only the real path produces it.
 CREATE OR REPLACE TABLE stg_alldrug_totals AS
-SELECT
-    CAST(Prscrbr_NPI AS BIGINT)                              AS npi,
-    CAST(regexp_extract(filename, '(\d{4})', 1) AS INTEGER)  AS year,
-    CAST(All_Drug_Tot_Clms_Observed AS DOUBLE)               AS observed_all_clms
-FROM read_csv_auto('{{RAW}}/npi_alldrug_totals_*.csv',
-                   filename = true, union_by_name = true, header = true);
+{{ALLDRUG_SOURCE}};
 
 
 CREATE OR REPLACE TABLE stg_suppression AS

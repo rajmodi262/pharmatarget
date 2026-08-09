@@ -17,7 +17,7 @@ CREATE OR REPLACE TABLE stg_scripts AS
 WITH raw AS (
     SELECT
         *,
-        CAST(regexp_extract(filename, '(\d{4})', 1) AS INTEGER) AS year
+        CAST(regexp_extract(filename, '_(\d{4})\.csv$', 1) AS INTEGER) AS year
     FROM read_csv_auto(
         '{{RAW}}/partd_drug_*.csv',
         filename = true,
@@ -53,3 +53,4 @@ SELECT
 FROM stg_scripts
 WHERE is_in_class
 GROUP BY npi, year;
+
