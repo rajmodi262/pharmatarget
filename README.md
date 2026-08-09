@@ -1,9 +1,14 @@
 # PharmaTarget
 
-**Prescribers this model flagged as high-opportunity in 2023 grew branded volume
-1.37× faster in 2024 — a year the model never saw — than propensity-matched
-prescribers it did not flag. Paired difference +5.2 fills, 95% CI [4.1, 6.3],
-across 49,864 matched pairs balanced on five covariates (worst SMD 0.041).**
+**Pointing the same 60 reps at modelled opportunity instead of prescription
+volume is worth $18.1M a year in incremental contribution — at identical
+headcount and identical cost.**
+
+The model earns that: prescribers it flagged as high-opportunity in 2023 grew
+branded volume **1.37× faster** in 2024 — a year it never saw — than
+propensity-matched prescribers it did not flag. Paired difference **+5.2 fills,
+95% CI [4.1, 6.3]**, across 49,864 pairs balanced on five covariates (worst
+SMD 0.041).
 
 An HCP targeting and territory alignment engine for a branded direct oral
 anticoagulant, built on 29 GB of real Medicare Part D and Open Payments data
@@ -70,9 +75,24 @@ invariance.
 23,615 are low-volume/high-opportunity — invisible to the volume rule. 26,580
 are high-volume/low-opportunity — over-served by it.
 
-**3. At a fixed 60-rep budget, opportunity targeting reaches 6.9% of addressable
-opportunity against 3.2% for volume and 0.6% for geography** · *arithmetic*
-Same headcount, same call budget. 2.2× more opportunity in front of a rep.
+**3. Retargeting is worth $18.1M a year at zero incremental cost** · *arithmetic, then scenario*
+At a fixed 60-rep budget, opportunity targeting reaches **6.9%** of addressable
+opportunity against **3.2%** for volume and 0.6% for geography — 2.2× more
+opportunity in front of a rep, same headcount.
+
+Priced through the fitted response curve, holding cost identical on both arms:
+
+| Allocation rule | Incremental fills | Contribution |
+|---|---|---|
+| Opportunity-ranked | 102,830 | **$34.0M** |
+| Volume-ranked (status quo) | 48,225 | $15.9M |
+| **Delta** | **+54,605** | **+$18.1M** |
+
+**2.13× uplift on the same 60 reps and the same $15M of field cost.** Because
+cost is identical on both sides it cancels entirely, so this is pure incremental
+contribution — the cleanest form a consulting number takes. It inherits the
+response curve's upper-bound caveat, but every other input is held fixed, so the
+*ratio* between the arms is far more robust than either arm's absolute level.
 
 **4. The force is already the right size. Don't hire — retarget** · *arithmetic, then scenario*
 60 reps serve **8,389 of 267,171 in-market prescribers — 3.1%** — at 100%
@@ -126,11 +146,21 @@ already diverging before any payment arrived — so the estimate is reported as 
 protocol in [CHARTER.md](CHARTER.md). That decision was written down before the
 model was fit.
 
-**7. Behavioural segmentation is stable** · *arithmetic*
-k=8, silhouette 0.807, bootstrap adjusted Rand index **0.998** across 25
-resamples. Segments chosen on stability as well as separation — a k that
-reshuffles under resampling is not a segmentation, it is one partition of one
-sample.
+**7. Behavioural segmentation, on the addressable market only** · *arithmetic*
+k=7 over the 282,182 in-market prescribers. Silhouette **0.229**, bootstrap
+adjusted Rand index **0.950** across 25 resamples. Segments are chosen on
+stability as well as separation — a k that reshuffles under resampling is not a
+segmentation, it is one partition of one sample.
+
+An earlier version reported silhouette 0.807, and that number was an artifact.
+Clustering ran over all 1.59M Part D prescribers, so 83% of its capacity went on
+partitioning people who write **no anticoagulants** into near-identical all-zero
+groups — "Untapped Potential" came back as 64% of the universe with a brand
+share of 0.000006. Trivially separable zero clusters make the geometry look
+excellent while the segmentation says nothing. Restricted to the in-market
+universe, the honest figure is 0.229 and the segments actually differentiate:
+brand share spans 0.19 to 0.70 and Rising Switchers carry a +0.364 share
+trajectory.
 
 ---
 

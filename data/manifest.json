@@ -396,28 +396,27 @@
     "path": "data\\processed\\segmentation_diagnostics.parquet"
   },
   "segment_profiles": {
-    "rows": 8,
+    "rows": 7,
     "cols": 12,
     "path": "data\\processed\\segment_profiles.parquet"
   },
   "hcp_segments": {
-    "rows": 1591964,
+    "rows": 282182,
     "cols": 10,
     "path": "data\\processed\\hcp_segments.parquet"
   },
   "segmentation": {
-    "k": 8,
-    "silhouette": 0.8074,
-    "stability_ari": 0.9981,
+    "k": 7,
+    "silhouette": 0.2287,
+    "stability_ari": 0.9503,
     "segments": [
       "Untapped Potential",
-      "Loyal Advocates",
       "Generic Anchors",
-      "Low-Value Tail",
-      "Rising Switchers",
-      "Segment 5",
+      "Segment 2",
       "Eroding Base",
-      "Segment 7"
+      "Rising Switchers",
+      "Low-Value Tail",
+      "Loyal Advocates"
     ]
   },
   "response_naive_ols": {
@@ -585,5 +584,21 @@
     "n_prescribers": 249373,
     "identified_from": "Open Payments food-and-beverage event count (rep-visit proxy)",
     "caveat": "Observational. Volume-decile stratification removes the dominant confounder but reps still select within a stratum on information the model cannot see. Treat the ceiling as an UPPER BOUND."
+  },
+  "retargeting_value": {
+    "n_reps": 60,
+    "annual_capacity_calls": 115200.0,
+    "calls_per_target_per_year": 13.73,
+    "prescribers_reachable": 8390,
+    "opportunity_incremental_fills": 102830.0,
+    "opportunity_contribution": 33995609.0,
+    "volume_incremental_fills": 48225.0,
+    "volume_contribution": 15943140.0,
+    "delta_fills": 54605.0,
+    "delta_contribution": 18052468.0,
+    "uplift_vs_volume": 2.132,
+    "field_cost": 15000000.0,
+    "incremental_cost": 0,
+    "label": "SCENARIO -- inherits the fitted response curve; cost identical on both arms"
   }
 }

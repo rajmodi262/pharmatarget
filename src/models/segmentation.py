@@ -77,6 +77,25 @@ def build_panel(scored: pd.DataFrame, payments: pd.DataFrame) -> pd.DataFrame:
                           / df[f"class_fills_{yrs[-2]}"].clip(lower=1.0)).fillna(0.0)
     df["log_payments"] = np.log1p(df["pay_total"])
     df["opportunity_pct"] = df[f"opportunity_pct_of_potential_{latest}"].fillna(0.0)
+
+    # SEGMENT THE ADDRESSABLE MARKET, NOT THE WHOLE PART D FILE.
+    #
+    # Run on all 1.59M prescribers, the clustering spent 83% of its capacity
+    # partitioning people who write NO anticoagulants into near-identical
+    # all-zero groups: "Untapped Potential" came back as 64.2% of the universe
+    # with a brand share of 0.000006 and log class volume of 0.048. Those are
+    # not a behavioural segment, they are the out-of-market population.
+    #
+    # It also inflated the silhouette to 0.807 -- trivially separable zero
+    # clusters make the geometry look excellent while the segmentation says
+    # nothing. Same failure the deciling had before it was restricted to
+    # in-market prescribers; the fix simply was not propagated here.
+    before = len(df)
+    df = df[df[f"class_fills_{latest}"].fillna(0) > 0]
+    log.info("segmenting the addressable market: %s of %s prescribers write the "
+             "class (%.1f%% excluded as out-of-market)",
+             f"{len(df):,}", f"{before:,}", 100 * (1 - len(df) / max(before, 1)))
+
     return df.dropna(subset=FEATURES)
 
 

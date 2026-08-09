@@ -329,6 +329,92 @@ def headline_h3(planned: pd.DataFrame | _Ranked) -> dict:
     return res
 
 
+def retargeting_value(planned: pd.DataFrame, n_reps: int | None = None) -> dict:
+    """What is the recommendation WORTH, at identical headcount and cost?
+
+    THE GAP THIS CLOSES
+    -------------------
+    Once the fitted response curve showed the field force was already the right
+    size, the sizing module stopped producing a dollar figure -- and the project
+    was left arguing brilliantly for a recommendation whose value it never
+    stated. "2.2x more addressable opportunity reached" is a ratio. A brand team
+    approves money, not ratios.
+
+    THE COMPARISON
+    --------------
+    Hold EVERYTHING constant except the ranking used to allocate a fixed call
+    budget:
+
+        same 60 reps, same cost, same calls/day, same response curve
+        rule A: fill the diaries from the top of the OPPORTUNITY ranking
+        rule B: fill them from the top of the VOLUME ranking (the status quo)
+
+    The difference in captured fills, priced at net revenue and margin, is the
+    value of retargeting. Because cost is identical on both sides it cancels
+    entirely -- this is pure incremental contribution, which is the cleanest
+    form a consulting number can take.
+
+    It is still a SCENARIO: it inherits the fitted response curve and therefore
+    that curve's upper-bound caveat. But the curve is now measured, and the
+    comparison holds every other input fixed, so the ratio between the two arms
+    is far more robust than either arm's absolute level.
+    """
+    n_reps = n_reps or economics()["sizing"]["current_n_reps"]
+    resp = _fitted_response()
+    ceiling = resp.get("call_response_ceiling", econ("call_response_ceiling"))
+    half = resp.get("call_response_half_saturation", econ("call_response_half_saturation"))
+
+    annual_capacity = (n_reps * econ("calls_per_rep_per_day")
+                       * econ("selling_days_per_month") * 12.0)
+    per_fill = econ("net_revenue_per_30day_fill") * econ("contribution_margin")
+
+    # Flat frequency so the two arms differ ONLY in who is chosen, not in how
+    # often they are seen. Using the opportunity-derived matrix frequency on
+    # both sides would smuggle the opportunity model into the volume arm.
+    served = planned.loc[planned["is_target"], "calls_per_month"]
+    freq = float(served.mean() * 12.0) if len(served) else 12.0
+    n_reachable = int(min(annual_capacity / max(freq, 1e-6), len(planned)))
+
+    out: dict[str, float | int | str] = {
+        "n_reps": n_reps,
+        "annual_capacity_calls": round(annual_capacity, 0),
+        "calls_per_target_per_year": round(freq, 2),
+        "prescribers_reachable": n_reachable,
+    }
+
+    captured: dict[str, float] = {}
+    for rule, col in (("opportunity", "opportunity"), ("volume", "class_fills")):
+        top = planned.nlargest(n_reachable, col)
+        fills = float((top["opportunity"].to_numpy(dtype=float)
+                       * hill(np.full(len(top), freq), ceiling, half)).sum())
+        captured[rule] = fills
+        out[f"{rule}_incremental_fills"] = round(fills, 0)
+        out[f"{rule}_contribution"] = round(fills * per_fill, 0)
+
+    delta_fills = captured["opportunity"] - captured["volume"]
+    delta_value = delta_fills * per_fill
+    out["delta_fills"] = round(delta_fills, 0)
+    out["delta_contribution"] = round(delta_value, 0)
+    out["uplift_vs_volume"] = (round(captured["opportunity"] / captured["volume"], 3)
+                               if captured["volume"] else None)
+    out["field_cost"] = round(n_reps * econ("rep_cost_annual"), 0)
+    out["incremental_cost"] = 0
+    out["label"] = "SCENARIO -- inherits the fitted response curve; cost identical on both arms"
+
+    log.info("RETARGETING VALUE at %d reps (cost identical on both sides):", n_reps)
+    log.info("  opportunity-ranked  %s incremental fills  -> %s contribution",
+             f"{captured['opportunity']:,.0f}", f"${out['opportunity_contribution']:,.0f}")
+    log.info("  volume-ranked       %s incremental fills  -> %s contribution",
+             f"{captured['volume']:,.0f}", f"${out['volume_contribution']:,.0f}")
+    log.info("  DELTA               %s fills = %s a year, for ZERO additional cost "
+             "(%.2fx uplift on the same %d reps)",
+             f"{delta_fills:,.0f}", f"${delta_value:,.0f}",
+             out["uplift_vs_volume"] or 0, n_reps)
+
+    record("retargeting_value", **out)
+    return out
+
+
 def run() -> dict:
     proc = path("processed")
     planned = read_parquet(proc / "hcp_call_plan.parquet")
@@ -337,6 +423,8 @@ def run() -> dict:
     curve = roi_curve(ranked)
     torn = tornado(ranked)
     h3 = headline_h3(ranked)
+    retarget = retargeting_value(planned)
+    h3["retargeting_contribution"] = retarget.get("delta_contribution")
 
     write_parquet(curve, proc / "sizing_roi_curve.parquet")
     write_parquet(torn, proc / "sizing_tornado.parquet")
