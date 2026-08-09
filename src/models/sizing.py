@@ -238,29 +238,63 @@ def headline_h3(planned: pd.DataFrame | _Ranked) -> dict:
     be_low = float(torn[["break_even_low", "break_even_high"]].min().min())
     be_high = float(torn[["break_even_low", "break_even_high"]].max().max())
 
-    # Value of moving from the current force to the break-even force.
-    gap = int(round(be - current))
-    at_be = evaluate_force(ranked, max(int(round(be)), 1))
+    # --- separate the DIAGNOSTIC from the RECOMMENDATION --------------------
+    #
+    # `be` is where economics alone stop binding. It is a real output and is
+    # published. It is NOT a hiring plan: nothing in the model knows a field
+    # force cannot be grown ten-fold, and presenting a 526-rep ask would tell a
+    # reader that the fitted response curve is doing all the work.
+    #
+    # The recommendation is capped at one recruiting cycle. Everything past the
+    # cap is reported as unmet demand -- which is the honest description of it,
+    # and is arithmetic rather than scenario.
+    ceiling = economics()["sizing"].get("max_plausible_expansion", 1.5)
+    max_recommendable = int(round(current * ceiling))
+    recommended = int(min(round(be), max_recommendable))
+    capped = round(be) > max_recommendable
+
     at_cur = evaluate_force(ranked, current)
-    delta_profit = at_be["profit"] - at_cur["profit"]
+    at_rec = evaluate_force(ranked, max(recommended, 1))
+    at_be = evaluate_force(ranked, max(int(round(be)), 1))
+    delta_profit = at_rec["profit"] - at_cur["profit"]
 
     res = {
         "current_n_reps": current,
+        # what we actually recommend
+        "recommended_n_reps": recommended,
+        "recommended_add": recommended - current,
+        "recommendation_capped": bool(capped),
+        "cap_basis": (f"one recruiting cycle ({ceiling}x current force); "
+                      f"the model's unconstrained answer is not executable"),
+        "incremental_profit": round(delta_profit, 0),
+        # the diagnostic, published but never presented as an ask
         "break_even_n_reps": round(be, 1),
-        "rep_gap": gap,
+        "unmet_demand_reps": max(int(round(be)) - recommended, 0),
         "marginal_roi_at_current": round(float(at_current["marginal_roi"]), 3),
+        "marginal_roi_at_recommended": round(
+            float(curve.loc[(curve["n_reps"] - recommended).abs().idxmin(), "marginal_roi"] or 0), 3),
         "roi_at_current": round(float(at_cur["roi"] or 0), 3),
         "contribution_at_current": round(at_cur["contribution"], 0),
+        "contribution_at_recommended": round(at_rec["contribution"], 0),
         "contribution_at_break_even": round(at_be["contribution"], 0),
-        "incremental_profit": round(delta_profit, 0),
         "sensitivity_low": round(be_low, 1),
         "sensitivity_high": round(be_high, 1),
         "label": "SCENARIO -- depends on the fitted response curve, not observed calls",
     }
-    log.info("H3 (SCENARIO): marginal rep returns $%.2f per $1 at %d reps; break-even at "
-             "%.0f reps (%+d). Incremental profit $%.1fM. Sensitivity: %.0f-%.0f reps.",
-             res["marginal_roi_at_current"], current, be, gap,
-             delta_profit / 1e6, be_low, be_high)
+
+    log.info("H3 RECOMMENDATION: add %d reps (%d -> %d), worth $%.1fM in contribution. "
+             "Marginal rep still returns $%.2f per $1 at the recommended size.",
+             res["recommended_add"], current, recommended,
+             delta_profit / 1e6, res["marginal_roi_at_recommended"])
+    if capped:
+        log.info("  DIAGNOSTIC (not a recommendation): economics alone do not bind until "
+                 "%.0f reps, leaving %d reps of unmet demand beyond what one recruiting "
+                 "cycle can absorb. Reported as coverage shortfall, not as a hiring ask -- "
+                 "a %.0fx expansion is not executable and quoting it would say only that "
+                 "the response curve is carrying the result.",
+                 be, res["unmet_demand_reps"], be / current)
+    log.info("  Sensitivity on the break-even diagnostic: %.0f-%.0f reps.", be_low, be_high)
+
     record("headline_h3", **res)
     return res
 

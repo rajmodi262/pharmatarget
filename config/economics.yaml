@@ -72,6 +72,24 @@ call_response_half_saturation:
 
 # Sizing search space for the marginal-ROI curve.
 sizing:
+  # ORGANISATIONAL CEILING ON THE RECOMMENDATION.
+  #
+  # The marginal-ROI model is happy to recommend a ten-fold expansion, because
+  # nothing in it knows that a field force cannot be grown 10x. No pharma CFO
+  # approves 526 new hires off a public-data model, and putting that number
+  # forward as an ask would say only one thing to the reader: that the fitted
+  # response curve is carrying the entire result.
+  #
+  # So the RECOMMENDATION is capped at a plausible one-cycle expansion and the
+  # remainder is reported as unmet demand, which is what it actually is. The
+  # uncapped break-even is still computed and published as a diagnostic -- it is
+  # a real output and hiding it would be worse -- but it is labelled as the
+  # point where economics alone stop binding, not as a hiring plan.
+  #
+  # 1.5x is one recruiting cycle: ~30 reps on a 60-rep force, which is at the
+  # top of what a brand team executes in a year without restructuring.
+  max_plausible_expansion: 1.5
+
   # The range must span the point where the marginal rep stops paying, or
   # break_even_reps() just returns the top of the grid and the headline becomes
   # an artefact of the search window rather than a finding.

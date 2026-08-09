@@ -56,12 +56,21 @@ are high-volume/low-opportunity — over-served by it.
 opportunity against 3.2% for volume and 0.6% for geography** · *arithmetic*
 Same headcount, same call budget. 2.2× more opportunity in front of a rep.
 
-**4. The force is drastically under-sized** · *arithmetic, then scenario*
-60 reps can serve **8,389 of 267,171 in-market prescribers — 3.1%**, at 100%
-capacity utilisation. The unconstrained call plan wants 106,869 prescribers,
-implying **579 reps**. Marginal-rep economics put break-even at **586 reps**
-(sensitivity 471–700). The first half of that is arithmetic; the break-even
-figure is a scenario resting on a fitted response curve.
+**4. The force is under-sized. Recommend +30 reps — not what the model says** · *arithmetic, then scenario*
+60 reps serve **8,389 of 267,171 in-market prescribers — 3.1%** — at 100%
+capacity utilisation. That part is arithmetic.
+
+The recommendation is **60 → 90 reps**, one recruiting cycle, worth **$62M** in
+contribution with the marginal rep still returning **$8.57 per $1** at the
+recommended size.
+
+The marginal-ROI model itself does not stop binding until **586 reps**
+(sensitivity 471–700), and that figure is published as a diagnostic in
+`config/economics.yaml` and the manifest. It is **not** the recommendation. A
+ten-fold expansion is not executable, and putting it forward as an ask would
+communicate one thing only: that the fitted response curve is carrying the
+entire result. The 496 reps between the cap and the model's answer are reported
+as **unmet demand** — a coverage shortfall, which is what they actually are.
 
 **5. Suppression hides 13.7% of all claim volume, and it is not random** · *arithmetic*
 99.7% of prescriber-years are affected. The bias is systematic:
