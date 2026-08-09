@@ -234,6 +234,14 @@ Invoke-Stage -Name "response" `
 # 4. quality
 # --------------------------------------------------------------------------- #
 
+# Gates G2 and G4 are evaluated by src/pipeline.py, which run_all.ps1 does not
+# call -- it runs each module directly so stages stay independently resumable.
+# Without this, only G3 (recorded inside backtest.py) ever reaches the manifest,
+# and the summary silently reports one gate instead of three.
+Invoke-Stage -Name "gates" `
+    -Command "$Python -m src.utils.gates" `
+    -Artifact "" `
+
 Invoke-Stage -Name "assets" `
     -Command "$Python -m src.report.make_assets" `
     -Artifact "outputs\PharmaTarget_Recommendations.pdf" `

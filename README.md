@@ -222,8 +222,11 @@ and coronary prevalence from CDC PLACES, population density. The 80th percentile
 is the achievable frontier: what a *strong* comparable prescriber reaches, not an
 average one. Then `opportunity = potential_class × achievable_share − brand_fills`.
 
-- In-sample coverage **0.800** against τ=0.80 — the quantile fit converged, so
-  the frontier reading is earned rather than asserted.
+- In-sample coverage **0.785** against τ=0.80 — the quantile fit converged, so
+  the frontier reading is earned rather than asserted. (The primary fit on the
+  full 2023 universe reaches 0.800; the value in the manifest is the back-test's
+  frozen refit on the training subset, which is the more conservative figure and
+  therefore the one quoted.)
 - Cross-checked against a corrected-OLS stochastic-frontier approximation:
   Spearman **0.849**. SFA is the textbook approach; agreement that close means
   the choice of quantile GBM is a convenience, not a load-bearing assumption.

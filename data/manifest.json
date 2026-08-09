@@ -455,5 +455,22 @@
     "rows": 5,
     "cols": 3,
     "path": "data\\processed\\response_balance.parquet"
+  },
+  "gate_g2": {
+    "gate": "G2",
+    "passed": true,
+    "disagree_pct": 0.5938,
+    "criterion": "at least 30% of in-market prescribers move 2+ deciles between the volume and opportunity rankings"
+  },
+  "gate_g4": {
+    "gate": "G4",
+    "passed": true,
+    "contiguity_rate": 1.0,
+    "workload_cv": 0.1158,
+    "conditions": {
+      "contiguous": true,
+      "balanced": true
+    },
+    "criterion": "contiguity >= 0.95 AND workload CV <= 0.2"
   }
 }
