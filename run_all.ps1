@@ -207,6 +207,12 @@ Invoke-Stage -Name "challenger" `
     -Artifact "$P\challenger_results.parquet" `
     -Sources @("src\models\challenger.py", "$P\hcp_scored.parquet")
 
+# MUST run before sizing: it fits the response curve sizing depends on.
+Invoke-Stage -Name "call-response" `
+    -Command "$Python -m src.models.call_response" `
+    -Artifact "$P\call_response_curve.parquet" `
+    -Sources @("src\models\call_response.py", "$P\mart_payments.parquet")
+
 Invoke-Stage -Name "sizing" `
     -Command "$Python -m src.models.sizing" `
     -Artifact "$P\sizing_tornado.parquet" `

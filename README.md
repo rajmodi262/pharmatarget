@@ -74,21 +74,32 @@ are high-volume/low-opportunity — over-served by it.
 opportunity against 3.2% for volume and 0.6% for geography** · *arithmetic*
 Same headcount, same call budget. 2.2× more opportunity in front of a rep.
 
-**4. The force is under-sized. Recommend +30 reps — not what the model says** · *arithmetic, then scenario*
+**4. The force is already the right size. Don't hire — retarget** · *arithmetic, then scenario*
 60 reps serve **8,389 of 267,171 in-market prescribers — 3.1%** — at 100%
 capacity utilisation. That part is arithmetic.
 
-The recommendation is **60 → 90 reps**, one recruiting cycle, worth **$62M** in
-contribution with the marginal rep still returning **$8.57 per $1** at the
-recommended size.
+Break-even sits at **63 reps**. The marginal rep returns **$1.02 per $1** — the
+force is within a rounding error of correctly sized, and the recommendation is
+therefore *not* a headcount change. **It is where those 60 reps point.**
 
-The marginal-ROI model itself does not stop binding until **586 reps**
-(sensitivity 471–700), and that figure is published as a diagnostic in
-`config/economics.yaml` and the manifest. It is **not** the recommendation. A
-ten-fold expansion is not executable, and putting it forward as an ask would
-communicate one thing only: that the fitted response curve is carrying the
-entire result. The 496 reps between the cap and the model's answer are reported
-as **unmet demand** — a coverage shortfall, which is what they actually are.
+**This finding reversed, and how it reversed is the point.** The response curve
+was originally two constants typed into `config/economics.yaml` — a ceiling of
+0.28 and a half-saturation of 12 calls. On those assumptions the model said
+*hire 526 more reps*, which is not a recommendation anyone would act on.
+
+So the curve was **fitted instead of assumed**, using Open Payments
+food-and-beverage event counts as a rep-visit proxy (§ Method). Measured:
+
+| | Assumed | **Fitted** |
+|---|---|---|
+| Response ceiling | 0.28 | **0.0156** [0.0083, 0.0225] |
+| Half-saturation | 12.0 calls/yr | **1.8** [0.5, 4.3] |
+| → break-even | 586 reps | **63 reps** |
+
+The assumed ceiling was **18× too optimistic**, and it was carrying the entire
+sizing conclusion. Promotional response saturates after roughly two visits a
+year and captures ~1.6% of remaining headroom — small, and now measured rather
+than asserted. Weighted R² 0.615 across 19 call levels and 249,373 prescribers.
 
 **5. Suppression hides 13.7% of all claim volume, and it is not random** · *arithmetic*
 99.7% of prescriber-years are affected. The bias is systematic:

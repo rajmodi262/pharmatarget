@@ -109,7 +109,7 @@
   },
   "mart_payments": {
     "rows": 468619,
-    "cols": 9,
+    "cols": 11,
     "path": "data\\processed\\mart_payments.parquet"
   },
   "mart_payment_onset": {
@@ -271,21 +271,21 @@
   },
   "headline_h3": {
     "current_n_reps": 60,
-    "recommended_n_reps": 90,
-    "recommended_add": 30,
-    "recommendation_capped": true,
+    "recommended_n_reps": 63,
+    "recommended_add": 3,
+    "recommendation_capped": false,
     "cap_basis": "one recruiting cycle (1.5x current force); the model's unconstrained answer is not executable",
-    "incremental_profit": 62124183.0,
-    "break_even_n_reps": 586.2,
-    "unmet_demand_reps": 496,
-    "marginal_roi_at_current": 10.771,
-    "marginal_roi_at_recommended": 8.575,
-    "roi_at_current": 18.5,
-    "contribution_at_current": 277503213.0,
-    "contribution_at_recommended": 347127396.0,
-    "contribution_at_break_even": 920971616.0,
-    "sensitivity_low": 471.1,
-    "sensitivity_high": 700.0,
+    "incremental_profit": 9514.0,
+    "break_even_n_reps": 63.2,
+    "unmet_demand_reps": 0,
+    "marginal_roi_at_current": 1.022,
+    "marginal_roi_at_recommended": 1.022,
+    "roi_at_current": 1.7,
+    "contribution_at_current": 25499679.0,
+    "contribution_at_recommended": 26259193.0,
+    "contribution_at_break_even": 26259193.0,
+    "sensitivity_low": 40.0,
+    "sensitivity_high": 588.8,
     "label": "SCENARIO -- depends on the fitted response curve, not observed calls"
   },
   "sizing_roi_curve": {
@@ -562,5 +562,28 @@
     "rows": 5,
     "cols": 3,
     "path": "data\\processed\\robustness_balance.parquet"
+  },
+  "call_response_curve": {
+    "rows": 19,
+    "cols": 3,
+    "path": "data\\processed\\call_response_curve.parquet"
+  },
+  "call_response_fit": {
+    "fitted": true,
+    "ceiling": 0.01562,
+    "ceiling_ci": [
+      0.00835,
+      0.02254
+    ],
+    "half_saturation_calls": 1.839,
+    "half_saturation_ci": [
+      0.5,
+      4.31
+    ],
+    "weighted_r2": 0.6146,
+    "n_levels": 19,
+    "n_prescribers": 249373,
+    "identified_from": "Open Payments food-and-beverage event count (rep-visit proxy)",
+    "caveat": "Observational. Volume-decile stratification removes the dominant confounder but reps still select within a stratum on information the model cannot see. Treat the ceiling as an UPPER BOUND."
   }
 }

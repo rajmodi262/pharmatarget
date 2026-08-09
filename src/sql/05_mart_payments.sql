@@ -49,6 +49,23 @@ SELECT
     SUM(CASE WHEN parent IN ({{FOCUS_PARENTS}}) THEN amount ELSE 0 END)  AS pay_focus,
     SUM(CASE WHEN parent IN ({{COMP_PARENTS}})  THEN amount ELSE 0 END)  AS pay_competitor,
     SUM(CASE WHEN nature ILIKE '%Food%' THEN amount ELSE 0 END)          AS pay_food,
+
+    -- COUNT of food-and-beverage transactions, not just their value.
+    --
+    -- This is the closest public proxy to a rep call that exists. A
+    -- food-and-beverage transfer is logged when a representative buys a meal
+    -- during a detailing visit, so the COUNT of those events approximates the
+    -- number of promotional touchpoints a prescriber received in a year --
+    -- which is exactly the independent variable the sizing model needs and
+    -- which CMS does not otherwise publish.
+    --
+    -- Dollars are the wrong unit here: a $12 sandwich and a $12 coffee are two
+    -- visits, while one $2,400 consulting fee is not a visit at all. Counting
+    -- events, restricted to the food nature, is what makes this a call proxy
+    -- rather than a spend proxy.
+    COUNT(*) FILTER (WHERE nature ILIKE '%Food%')                         AS pay_food_count,
+    COUNT(*) FILTER (WHERE nature ILIKE '%Food%'
+                       AND parent IN ({{FOCUS_PARENTS}}))                 AS pay_food_count_focus,
     SUM(CASE WHEN nature ILIKE '%Consulting%'
               OR nature ILIKE '%services other than consulting%'
              THEN amount ELSE 0 END)                                     AS pay_services

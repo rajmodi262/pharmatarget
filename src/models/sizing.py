@@ -43,7 +43,7 @@ import numpy as np
 import pandas as pd
 
 from src.config import econ, economics, path
-from src.utils.io import get_logger, read_parquet, record, write_parquet
+from src.utils.io import get_logger, manifest, read_parquet, record, write_parquet
 
 log = get_logger(__name__)
 
@@ -113,10 +113,40 @@ class _Ranked:
         self.n = len(order)
 
 
+def _fitted_response() -> dict[str, float]:
+    """The call-response parameters MEASURED by src/models/call_response.py.
+
+    These were previously two constants typed into config/economics.yaml
+    (ceiling 0.28, half-saturation 12.0), which made every dollar figure in this
+    module an assertion. They are now fitted to Open Payments food-and-beverage
+    event counts -- the closest public proxy for a rep visit -- within
+    volume-decile strata, with a bootstrap interval.
+
+    The fitted values are dramatically smaller than the assumed ones (ceiling
+    0.0156 against 0.28, an 18-fold difference), which is precisely why the
+    assumption could not be left standing.
+
+    UNITS. The fit expresses the ceiling as a fraction of a prescriber's SHARE
+    headroom captured per year; it is applied here to their opportunity in
+    fills. Both are "the gap that could be closed", so the quantity carries
+    over, but they are not identical constructions and that is stated rather
+    than smoothed over.
+
+    Falls back to the configured values when the fit has not run, and says so.
+    """
+    fit = manifest().get("call_response_fit") or {}
+    if fit.get("fitted"):
+        return {
+            "call_response_ceiling": float(fit["ceiling"]),
+            "call_response_half_saturation": float(fit["half_saturation_calls"]),
+        }
+    return {}
+
+
 def evaluate_force(planned: pd.DataFrame | _Ranked, n_reps: int,
                    overrides: dict | None = None) -> dict:
     """Contribution, cost and profit for a force of n_reps."""
-    o = overrides or {}
+    o = {**_fitted_response(), **(overrides or {})}
 
     def p(key: str) -> float:
         return float(o[key]) if key in o else econ(key)
