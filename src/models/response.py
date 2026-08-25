@@ -317,6 +317,34 @@ def fit_saturation(matched: pd.DataFrame) -> pd.DataFrame:
         record("response_saturation", identifiable=False, fitted_ceiling=float(popt[0]))
         return pd.DataFrame()
 
+    # A CEILING ABOVE THE FLOOR IS NOT ENOUGH -- THE BEND MUST BE INSIDE THE DATA.
+    # On a response with no curvature, curve_fit satisfies the ceiling bound by
+    # pushing the half-saturation far outside the observed spend range and
+    # returning the near-linear left tail of a Hill curve. Observed once on a
+    # flat response: ceiling 0.0213 with half-saturation at $82,125,313 against a
+    # maximum payment of $20,000 -- and a straight-faced "90% of maximum response
+    # at $739,127,820" in the log.
+    #
+    # That is not a saturating curve, it is a line through the origin fitted on a
+    # scale the data cannot see, and sizing.py would consume it as a Hill
+    # parameter implying unbounded linear returns to spend. If the response does
+    # not reach half its ceiling anywhere in the observed range, the saturation
+    # point is not identified and the honest answer is to say so.
+    x_max = float(x.max())
+    if popt[1] > x_max:
+        log.warning("SATURATION CURVE NOT IDENTIFIABLE: half-saturation fitted at "
+                    "$%.0f, beyond the largest observed payment of $%.0f. The response "
+                    "never reaches half its ceiling inside the data, so the bend is "
+                    "extrapolated rather than measured. Refusing rather than reporting "
+                    "an inflection point the spend range cannot support.",
+                    popt[1], x_max)
+        record("response_saturation", identifiable=False,
+               fitted_ceiling=float(popt[0]),
+               fitted_half_saturation_usd=float(popt[1]),
+               max_observed_payment_usd=x_max,
+               reason="half_saturation_outside_observed_range")
+        return pd.DataFrame()
+
     rng = np.random.default_rng(0)
     boots = []
     for _ in range(200):
