@@ -241,7 +241,7 @@ The public deployment at [https://pharmatarget.onrender.com](https://pharmatarge
 | `make download` | Fetch CMS sources (streamed and filtered, ~14 GB transferred) |
 | `.\run_all.ps1 -Serve` | Full pipeline, then serve on :8000 |
 | `make web-install && make web` | Frontend dev server on :5173 |
-| `make test` | 41 tests |
+| `make test` | 93 tests |
 
 ### On the synthetic mode
 
@@ -364,7 +364,8 @@ src/models/  opportunity · callplan · backtest · challenger · sizing
              territory · segmentation · response
 api/         12 routes, one read-only DuckDB connection, all filtering in SQL
 web/         React 18 + TS + Vite, 104 KB gzipped, five routes
-tests/       41 tests — leakage guards, contiguity floors, suppression identities
+tests/       93 tests — leakage guards, contiguity floors, suppression identities,
+             saturation-curve identifiability, matching balance and reuse
 run_all.ps1  resumable, dependency-aware pipeline runner
 ```
 

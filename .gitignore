@@ -39,3 +39,8 @@ Thumbs.db
 
 # Raw source data (CMS CSVs, gazetteer files) -- too large and not code
 dataset/
+
+# coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
