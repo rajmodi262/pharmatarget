@@ -70,6 +70,33 @@ call_response_half_saturation:
   unit: "annual calls to reach 50% of ceiling response"
   basis: "Hill k parameter; fitted, with the range taken from the bootstrap CI."
 
+# --- Switching costs. Used only by the business case (src/models/value.py):
+# a headcount change is not free and not instantly reversible, which is what
+# makes waiting for a measurement worth something.
+rep_hire_cost:
+  base: 60000
+  low: 40000
+  high: 90000
+  unit: "USD per rep hired, one-off"
+  basis: >
+    Recruiting fees, initial product and compliance training, territory set-up
+    and equipment for a new specialty-care representative. Public benchmarks
+    put onboarding at roughly 20-35% of a first-year fully loaded cost.
+
+rep_ramp_months:
+  base: 6
+  low: 3
+  high: 9
+  unit: "months at half productivity"
+  basis: "Time for a new rep to build access and call frequency in a territory."
+
+rep_separation_cost:
+  base: 50000
+  low: 30000
+  high: 80000
+  unit: "USD per rep released, one-off"
+  basis: "Severance, benefits continuation and territory hand-over disruption."
+
 # Sizing search space for the marginal-ROI curve.
 sizing:
   # ORGANISATIONAL CEILING ON THE RECOMMENDATION.

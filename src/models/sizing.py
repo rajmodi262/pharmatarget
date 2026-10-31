@@ -43,6 +43,7 @@ import numpy as np
 import pandas as pd
 
 from src.config import econ, economics, path
+from src.models.opportunity import hybrid_score
 from src.utils.io import get_logger, manifest, read_parquet, record, write_parquet
 
 log = get_logger(__name__)
@@ -135,12 +136,35 @@ def _fitted_response() -> dict[str, float]:
     Falls back to the configured values when the fit has not run, and says so.
     """
     fit = manifest().get("call_response_fit") or {}
-    if fit.get("fitted"):
+    if _response_identified(fit):
         return {
             "call_response_ceiling": float(fit["ceiling"]),
             "call_response_half_saturation": float(fit["half_saturation_calls"]),
         }
     return {}
+
+
+def _response_identified(fit: dict | None = None) -> bool:
+    """True only for a fitted curve that is off its bounds (call_response.py)."""
+    fit = fit if fit is not None else (manifest().get("call_response_fit") or {})
+    return bool(fit.get("fitted")) and fit.get("identifiable", True)
+
+
+def _fitted_ranges() -> dict[str, dict]:
+    """Tornado nodes (base/low/high/basis) for the fitted response parameters."""
+    fit = manifest().get("call_response_fit") or {}
+    if not _response_identified(fit):
+        return {}
+    basis = ("Fitted in src/models/call_response.py; range is the prescriber-level "
+             "bootstrap 95% interval.")
+    return {
+        "call_response_ceiling": {
+            "base": fit["ceiling"], "low": fit["ceiling_ci"][0],
+            "high": fit["ceiling_ci"][1], "basis": basis},
+        "call_response_half_saturation": {
+            "base": fit["half_saturation_calls"], "low": fit["half_saturation_ci"][0],
+            "high": fit["half_saturation_ci"][1], "basis": basis},
+    }
 
 
 def evaluate_force(planned: pd.DataFrame | _Ranked, n_reps: int,
@@ -229,10 +253,16 @@ def tornado(planned: pd.DataFrame | _Ranked) -> pd.DataFrame:
     base_curve = roi_curve(ranked)
     base_be = break_even_reps(base_curve)
     econ_cfg = economics()
+    fitted = _fitted_ranges()
 
     rows = []
     for key in SWEEP_KEYS:
-        node = econ_cfg[key]
+        # A FITTED parameter is swept across its bootstrap interval, not the
+        # config range. The config range for the ceiling (0.15-0.40) was drawn
+        # around the old ASSUMED 0.28; sweeping it against a fitted 0.016 put
+        # break-even anywhere from 40 to 589 reps -- a sensitivity to a number
+        # the model no longer uses.
+        node = fitted.get(key) or econ_cfg[key]
         lo_be = break_even_reps(roi_curve(ranked, {key: node["low"]}))
         hi_be = break_even_reps(roi_curve(ranked, {key: node["high"]}))
         rows.append({
@@ -312,6 +342,40 @@ def headline_h3(planned: pd.DataFrame | _Ranked) -> dict:
         "label": "SCENARIO -- depends on the fitted response curve, not observed calls",
     }
 
+    if not _response_identified():
+        # THE HONEST BRANCH. The fitted response is not identifiable from the
+        # public proxy, so there is no measured curve to price headcount on.
+        # Pricing the flat fit would "recommend" cutting the force to the bottom
+        # of the grid (zero response => every rep is pure cost), and pricing the
+        # config constants would resurrect the invented 0.28. Neither is a
+        # finding. The decision-useful output is the BREAK-EVEN RESPONSE: how
+        # large the call response must be for today's 60th rep to pay for itself.
+        # The recommendation is to hold headcount and measure that number in a
+        # pilot, which public data cannot do.
+        need = required_ceiling(ranked, current)
+        res.update({
+            "response_identified": False,
+            "recommended_n_reps": current,
+            "recommended_add": 0,
+            "recommendation_capped": False,
+            "incremental_profit": 0.0,
+            "required_ceiling_at_current": round(need, 5) if need is not None else None,
+            "required_ceiling_half_saturation": econ("call_response_half_saturation"),
+            "illustrative_break_even_n_reps": round(be, 1),
+            "label": ("NOT IDENTIFIED -- public data show no measurable call response; "
+                      "headcount held, break-even response reported, pilot recommended. "
+                      "Break-even and sensitivity shown use the config ASSUMPTIONS and "
+                      "are illustrative only."),
+        })
+        log.warning("H3: call response not identified. HOLD at %d reps. The 60th rep "
+                    "pays for itself only if a year of calling captures >= %.2f%% of a "
+                    "prescriber's remaining opportunity (half-saturation %.0f calls).",
+                    current, 100 * (need or float("nan")),
+                    econ("call_response_half_saturation"))
+        record("headline_h3", **res)
+        return res
+
+    res["response_identified"] = True
     log.info("H3 RECOMMENDATION: add %d reps (%d -> %d), worth $%.1fM in contribution. "
              "Marginal rep still returns $%.2f per $1 at the recommended size.",
              res["recommended_add"], current, recommended,
@@ -327,6 +391,35 @@ def headline_h3(planned: pd.DataFrame | _Ranked) -> dict:
 
     record("headline_h3", **res)
     return res
+
+
+def required_ceiling(ranked: _Ranked, n_reps: int, half_sat: float | None = None,
+                     lo: float = 1e-5, hi: float = 1.0, iters: int = 40) -> float | None:
+    """Response ceiling at which the n-th rep exactly pays for itself (mROI = 1).
+
+    Marginal ROI rises monotonically in the ceiling (contribution is linear in
+    it), so bisection is exact. Uses the same one-step marginal as roi_curve:
+    contribution(n) - contribution(n - step), per rep, over rep cost.
+    """
+    step = economics()["sizing"]["rep_range_step"]
+    half = half_sat if half_sat is not None else econ("call_response_half_saturation")
+    cost = econ("rep_cost_annual")
+
+    def mroi(c: float) -> float:
+        o = {"call_response_ceiling": c, "call_response_half_saturation": half}
+        hi_ = evaluate_force(ranked, n_reps, o)["contribution"]
+        lo_ = evaluate_force(ranked, max(n_reps - step, 1), o)["contribution"]
+        return (hi_ - lo_) / step / cost
+
+    if mroi(hi) < 1.0:
+        return None          # not even a 100%-of-headroom response pays
+    for _ in range(iters):
+        mid = (lo + hi) / 2.0
+        if mroi(mid) >= 1.0:
+            hi = mid
+        else:
+            lo = mid
+    return hi
 
 
 def retargeting_value(planned: pd.DataFrame, n_reps: int | None = None) -> dict:
@@ -361,8 +454,20 @@ def retargeting_value(planned: pd.DataFrame, n_reps: int | None = None) -> dict:
     """
     n_reps = n_reps or economics()["sizing"]["current_n_reps"]
     resp = _fitted_response()
-    ceiling = resp.get("call_response_ceiling", econ("call_response_ceiling"))
-    half = resp.get("call_response_half_saturation", econ("call_response_half_saturation"))
+    identified = _response_identified()
+    if identified:
+        ceiling = resp["call_response_ceiling"]
+        half = resp["call_response_half_saturation"]
+        pricing = "fitted response curve"
+    else:
+        # No measured response to price on. Price at the BREAK-EVEN response --
+        # the weakest response under which today's force pays for itself. If
+        # calling works at all well enough to justify 60 reps, re-targeting is
+        # worth at least this; it is a floor conditional on the force being
+        # worth having, not a measurement.
+        half = econ("call_response_half_saturation")
+        ceiling = required_ceiling(_Ranked(planned), n_reps, half) or 0.0
+        pricing = "break-even response (the response at which today's force exactly pays)"
 
     annual_capacity = (n_reps * econ("calls_per_rep_per_day")
                        * econ("selling_days_per_month") * 12.0)
@@ -382,9 +487,17 @@ def retargeting_value(planned: pd.DataFrame, n_reps: int | None = None) -> dict:
         "prescribers_reachable": n_reachable,
     }
 
+    # Rank inside the addressable market. Ranking the whole Part D file on
+    # opportunity used to put non-writers on the list (see score_opportunity).
+    pool = planned[planned["class_fills"] > 0].copy()
+    pool["hybrid"] = hybrid_score(pool)
+    n_reachable = min(n_reachable, len(pool))
+    out["prescribers_reachable"] = n_reachable
+
     captured: dict[str, float] = {}
-    for rule, col in (("opportunity", "opportunity"), ("volume", "class_fills")):
-        top = planned.nlargest(n_reachable, col)
+    for rule, col in (("opportunity", "opportunity"), ("volume", "class_fills"),
+                      ("hybrid", "hybrid")):
+        top = pool.nlargest(n_reachable, col)
         fills = float((top["opportunity"].to_numpy(dtype=float)
                        * hill(np.full(len(top), freq), ceiling, half)).sum())
         captured[rule] = fills
@@ -397,9 +510,22 @@ def retargeting_value(planned: pd.DataFrame, n_reps: int | None = None) -> dict:
     out["delta_contribution"] = round(delta_value, 0)
     out["uplift_vs_volume"] = (round(captured["opportunity"] / captured["volume"], 3)
                                if captured["volume"] else None)
+    out["hybrid_vs_volume_contribution"] = round(
+        (captured["hybrid"] - captured["volume"]) * per_fill, 0)
     out["field_cost"] = round(n_reps * econ("rep_cost_annual"), 0)
     out["incremental_cost"] = 0
-    out["label"] = "SCENARIO -- inherits the fitted response curve; cost identical on both arms"
+    # READ THIS BEFORE QUOTING THE DOLLAR FIGURE. Each arm is priced as
+    # (modelled opportunity on its list) x (fitted response). Ranking by
+    # opportunity maximises the first term BY CONSTRUCTION, so the opportunity
+    # arm cannot lose this comparison -- it is a valuation of the opportunity
+    # model's own view, not evidence for it. The evidence is the back-test
+    # (realised 2024 growth on each list); see challenger.py / backtest.py.
+    out["priced_at"] = pricing
+    out["priced_ceiling"] = round(float(ceiling), 5)
+    out["priced_half_saturation"] = float(half)
+    out["label"] = (f"MODELLED -- prices each list's modelled opportunity at the {pricing}. "
+                    "Ranking on opportunity maximises modelled opportunity by construction; "
+                    "validate against the realised-growth back-test before quoting.")
 
     log.info("RETARGETING VALUE at %d reps (cost identical on both sides):", n_reps)
     log.info("  opportunity-ranked  %s incremental fills  -> %s contribution",
@@ -428,6 +554,17 @@ def run() -> dict:
 
     write_parquet(curve, proc / "sizing_roi_curve.parquet")
     write_parquet(torn, proc / "sizing_tornado.parquet")
+
+    # The exhibit that replaces the ROI curve when the response is not
+    # identified: for each force size, the call response the LAST rep would
+    # need to pay for itself. It turns "we cannot measure it" into a number a
+    # pilot can be designed against.
+    cfg = economics()["sizing"]
+    grid = range(cfg["rep_range_min"] + cfg["rep_range_step"], cfg["rep_range_max"] + 1,
+                 cfg["rep_range_step"])
+    need = pd.DataFrame([{"n_reps": n, "required_ceiling": required_ceiling(ranked, n)}
+                         for n in grid])
+    write_parquet(need, proc / "sizing_required_response.parquet")
 
     # Program P&L at the current force and at break-even.
     current = economics()["sizing"]["current_n_reps"]

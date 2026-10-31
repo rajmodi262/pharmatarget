@@ -242,28 +242,43 @@ def propensity_match(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     return matched, balance
 
 
-def did_estimate(matched: pd.DataFrame, pretrend: dict) -> dict:
-    """DiD on the matched cohort, with state-clustered standard errors."""
+def _did(frame: pd.DataFrame) -> float:
+    t, c = frame[frame["treated"]], frame[~frame["treated"]]
+    return float((t["post_delta"].mean() - c["post_delta"].mean())
+                 - (t["pre_delta"].mean() - c["pre_delta"].mean()))
+
+
+def did_estimate(matched: pd.DataFrame, pretrend: dict,
+                 key: str = "response_did", n_boot: int = 300) -> dict:
+    """DiD with a state-cluster bootstrap standard error.
+
+    Also called on the UNMATCHED cohort (key="response_naive_did") so the
+    selection gap is stated in ONE unit. The earlier "29x" compared the naive
+    log-log ELASTICITY (0.061) with the matched DiD in SHARE POINTS (0.002) --
+    two different quantities, so their ratio meant nothing.
+
+    The SE resamples whole STATES with replacement (prescribers in a state share
+    formulary and payer shocks). The earlier SE was the spread of per-state DiDs
+    divided by sqrt(n_states), which weights a 40-prescriber state like Texas.
+    """
     if matched.empty:
         return {"computable": False}
 
-    t_post = matched.loc[matched["treated"], "post_delta"]
-    c_post = matched.loc[~matched["treated"], "post_delta"]
-    t_pre = matched.loc[matched["treated"], "pre_delta"]
-    c_pre = matched.loc[~matched["treated"], "pre_delta"]
+    did = _did(matched)
 
-    did = float((t_post.mean() - c_post.mean()) - (t_pre.mean() - c_pre.mean()))
-
-    # Cluster-robust SE by state: prescribers in a state share formulary and
-    # payer shocks, so treating them as independent understates the SE.
-    clusters = []
-    for _st, grp in matched.groupby("state"):
-        gt, gc = grp[grp["treated"]], grp[~grp["treated"]]
-        if len(gt) < 2 or len(gc) < 2:
-            continue
-        clusters.append((gt["post_delta"].mean() - gc["post_delta"].mean())
-                        - (gt["pre_delta"].mean() - gc["pre_delta"].mean()))
-    se = float(np.std(clusters) / np.sqrt(len(clusters))) if len(clusters) > 1 else np.nan
+    clusters = matched["state"].fillna("NA").to_numpy()
+    states = np.unique(clusters)
+    idx_by_state = {s: np.flatnonzero(clusters == s) for s in states}
+    rng = np.random.default_rng(0)
+    draws = []
+    for _ in range(n_boot):
+        pick = rng.choice(states, len(states), replace=True)
+        rows = np.concatenate([idx_by_state[s] for s in pick])
+        sample = matched.iloc[rows]
+        if sample["treated"].any() and (~sample["treated"]).any():
+            draws.append(_did(sample))
+    se = float(np.std(draws, ddof=1)) if len(draws) > 20 else np.nan
+    clusters = states
 
     res = {"computable": True, "did_estimate": round(did, 5),
            "cluster_se": round(se, 5) if np.isfinite(se) else None,
@@ -273,10 +288,12 @@ def did_estimate(matched: pd.DataFrame, pretrend: dict) -> dict:
            "interpretation": ("CAUSAL (pre-trends hold, observational caveats apply)"
                               if pretrend.get("parallel_trends_holds")
                               else "ASSOCIATION ONLY -- pre-trend test failed")}
-    log.info("DiD: %+.4f share points (SE %.4f, %d state clusters) -- %s",
-             did, se if np.isfinite(se) else float("nan"), len(clusters),
+    if res["ci_low"] is not None:
+        res["ci_includes_zero"] = bool(res["ci_low"] <= 0 <= res["ci_high"])
+    log.info("DiD [%s]: %+.4f share points (SE %.4f, %d state clusters) -- %s",
+             key, did, se if np.isfinite(se) else float("nan"), len(clusters),
              res["interpretation"])
-    record("response_did", **res)
+    record(key, **res)
     return res
 
 
@@ -378,7 +395,9 @@ def fit_saturation(matched: pd.DataFrame) -> pd.DataFrame:
 
 def run() -> dict:
     proc = path("processed")
-    metrics = read_parquet(proc / "mart_hcp_metrics.parquet")
+    metrics = read_parquet(proc / "mart_hcp_metrics.parquet", columns=[
+        "npi", "year", "class_fills", "brand_fills", "brand_share", "panel_benes",
+        "risk_score", "non_class_clms", "specialty_group", "region", "state"])
     onset = read_parquet(proc / "mart_payment_onset.parquet")
     payments = read_parquet(proc / "mart_payments.parquet")
 
@@ -387,6 +406,7 @@ def run() -> dict:
     pretrend = pretrend_test(cohort)
     matched, balance = propensity_match(cohort)
     did = did_estimate(matched, pretrend)
+    naive_did = did_estimate(cohort, pretrend, key="response_naive_did")
     curve = fit_saturation(matched) if not matched.empty else pd.DataFrame()
 
     if not balance.empty:
@@ -394,12 +414,28 @@ def run() -> dict:
     if not curve.empty:
         write_parquet(curve, proc / "response_saturation.parquet")
 
-    # The selection gap: how much the naive estimate shrinks once matched.
+    # THE SELECTION GAP, IN ONE UNIT (share points). Three estimates, each
+    # removing one more layer of selection:
+    #   naive post-period gap   paid vs unpaid, 2023->2024 share change
+    #   unmatched DiD           ... minus their pre-period gap
+    #   matched DiD             ... on propensity-matched pairs
+    t, c = cohort[cohort["treated"]], cohort[~cohort["treated"]]
+    naive_post = float(t["post_delta"].mean() - c["post_delta"].mean())
     if did.get("computable"):
-        log.info("SELECTION GAP -- naive OLS elasticity %.4f vs matched DiD %.4f share "
-                 "points. The difference is what targeting-by-design buys the "
-                 "manufacturer, and it is why the naive number must never be quoted alone.",
-                 naive["elasticity"], did["did_estimate"])
+        gap = {
+            "unit": "brand-share points, 2023->2024",
+            "naive_post_difference": round(naive_post, 5),
+            "unmatched_did": naive_did.get("did_estimate"),
+            "matched_did": did.get("did_estimate"),
+            "matched_did_ci": [did.get("ci_low"), did.get("ci_high")],
+            "matched_ci_includes_zero": did.get("ci_includes_zero"),
+        }
+        record("response_selection_gap", **gap)
+        log.info("SELECTION GAP (share points): naive %+.4f -> unmatched DiD %+.4f -> "
+                 "matched DiD %+.4f [%s, %s]. The shrinkage is selection; the naive "
+                 "number must never be quoted alone.",
+                 naive_post, naive_did.get("did_estimate") or 0, did["did_estimate"],
+                 did.get("ci_low"), did.get("ci_high"))
 
     return {"naive": naive, "pretrend": pretrend, "did": did}
 

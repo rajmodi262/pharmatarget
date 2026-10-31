@@ -16,7 +16,7 @@ import duckdb
 import pandas as pd
 
 from src.config import ROOT, class_generic_names, focus_generic_names, manufacturers, params, path
-from src.utils.io import get_logger, record, write_parquet
+from src.utils.io import get_logger, record
 
 log = get_logger(__name__)
 
@@ -63,9 +63,25 @@ def _alldrug_source() -> str:
     )
 
 
+def _product_regex(entries: list[dict]) -> str:
+    """Regex matching any brand name or generic stem in the given class entries.
+
+    Open Payments product names are free text ('ELIQUIS', 'Eliquis 5mg',
+    'apixaban'), so match on the brand and on the first word of the generic
+    ('DABIGATRAN' from 'DABIGATRAN ETEXILATE MESYLATE'). Upper-cased on both
+    sides in SQL 05.
+    """
+    tokens: set[str] = set()
+    for e in entries:
+        tokens.update(b.upper() for b in e.get("brand_names", []))
+        tokens.update(g.split()[0].upper() for g in e.get("generic_names", []))
+    return "(" + "|".join(sorted(tokens)) + ")"
+
+
 def _render(sql: str, impute_mode: str) -> str:
     p = params()
     mfg = manufacturers()
+    cd = p["class_definition"]
     tokens = {
         "{{RAW}}": RAW.as_posix(),
         "{{ALLDRUG_SOURCE}}": _alldrug_source(),
@@ -75,6 +91,10 @@ def _render(sql: str, impute_mode: str) -> str:
         "{{ACHIEVABLE_PCT}}": str(p["opportunity_model"]["achievable_share_pct"] / 100.0),
         "{{FOCUS_PARENTS}}": _sql_list(mfg["focus_brand_parents"]),
         "{{COMP_PARENTS}}": _sql_list(mfg["competitor_parents"]),
+        "{{FOCUS_PRODUCT_RE}}": _product_regex([cd["focus_brand"]]),
+        "{{COMP_PRODUCT_RE}}": _product_regex(cd["competitors"]),
+        "{{N_CLASS_GENERICS}}": str(len(set(class_generic_names()))),
+        "{{SUPPRESSION_MAX}}": str(int(p["suppression"]["threshold"]) - 1),
     }
     for token, value in tokens.items():
         sql = sql.replace(token, value)
@@ -181,13 +201,53 @@ def build(impute_mode: str | None = None, export: bool = True) -> Path:
              100 * supp["pct_npi_years_affected"], 100 * supp["hidden_share_of_total"])
     record(f"suppression_{impute_mode}", **{k: float(v) for k, v in supp.items()})
 
+    # Who the suppression hides, by prescriber size. Computed here so no slide
+    # or README ever has to type the 68.7%-style figures in by hand.
+    bands = con.execute("""
+        SELECT CASE WHEN all_drug_clms < 100 THEN '<100 claims'
+                    WHEN all_drug_clms < 500 THEN '100-500'
+                    WHEN all_drug_clms < 2000 THEN '500-2,000'
+                    ELSE '2,000+' END AS band,
+               SUM(suppressed_clms) / NULLIF(SUM(all_drug_clms), 0) AS hidden_share,
+               MIN(all_drug_clms) AS lo
+        FROM stg_suppression GROUP BY 1 ORDER BY lo
+    """).fetchall()
+    record("suppression_by_size", **{b: round(float(s or 0), 4) for b, s, _ in bands})
+
+    # How much of in-market class volume is imputed, and how often the
+    # physical cap binds -- the two numbers that say whether imputation is a
+    # rounding correction or is carrying the analysis.
+    imp = con.execute(f"""
+        SELECT SUM(class_fills_{impute_mode} - class_fills_observed)
+                 / NULLIF(SUM(class_fills_{impute_mode}), 0)            AS imputed_share,
+               AVG(CASE WHEN s.suppressed_clms * s.observed_class_frac
+                             > s.hidden_class_clms_cap THEN 1 ELSE 0 END) AS cap_binding_rate
+        FROM stg_class_imputed i JOIN stg_suppression s USING (npi, year)
+        WHERE i.class_fills_observed > 0
+    """).fetchone()
+    record(f"imputation_{impute_mode}", imputed_share_of_class_volume=round(float(imp[0] or 0), 4),
+           cap_binding_rate=round(float(imp[1] or 0), 4))
+    log.info("imputation (%s): %.1f%% of in-market class volume is imputed; the physical "
+             "cap binds for %.1f%% of in-market prescriber-years",
+             impute_mode, 100 * (imp[0] or 0), 100 * (imp[1] or 0))
+
     if export:
         out = path("processed")
         suffix = "" if impute_mode == p["suppression"]["base_mode"] else f"_{impute_mode}"
         for table in ("mart_hcp_metrics", "mart_peer_benchmarks",
                       "mart_payments", "mart_payment_onset", "stg_suppression"):
-            df = con.execute(f"SELECT * FROM {table}").fetchdf()
-            write_parquet(df, out / f"{table}{suffix}.parquet", label=f"{table}{suffix}")
+            # DuckDB writes the parquet itself. Round-tripping 4.1M rows through
+            # a pandas frame first doubled peak memory for no reason and failed
+            # outright on a loaded 16 GB machine.
+            target = out / f"{table}{suffix}.parquet"
+            con.execute(f"COPY {table} TO '{target.as_posix()}' (FORMAT PARQUET)")
+            n, ncol = con.execute(
+                f"SELECT (SELECT COUNT(*) FROM {table}), "
+                f"(SELECT COUNT(*) FROM information_schema.columns "
+                f"WHERE table_name = '{table}')").fetchone()
+            record(f"artifact:{table}{suffix}", rows=int(n), cols=int(ncol),
+                   path=str(target.relative_to(ROOT)))
+            log.info("wrote %-34s %8d rows x %2d cols", target.name, n, ncol)
 
     con.close()
     log.info("marts built -> %s", db_path.name)

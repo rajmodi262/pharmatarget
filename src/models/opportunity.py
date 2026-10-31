@@ -192,8 +192,16 @@ def assert_no_leakage(X: pd.DataFrame, y: pd.Series, feature_names: list[str]) -
                   for j in range(arr.shape[1]) if np.std(arr[:, j]) > 1e-12), default=0.0))
 
 
-def fit_potential(train: pd.DataFrame, tau: float | None = None) -> tuple:
-    """Fit the tau-quantile frontier. Returns (model, encoder, feature_names)."""
+def fit_potential(train: pd.DataFrame, tau: float | None = None,
+                  record_as: str | None = None) -> tuple:
+    """Fit the tau-quantile frontier. Returns (model, encoder, feature_names).
+
+    Records its fit statistics only when ``record_as`` is given. It is called
+    by the primary fit, the back-test refit and six tau-sweep refits, and every
+    one of them used to write the same `potential_model` key -- so the manifest
+    reported whichever fit ran LAST (tau 0.75 or 0.90 from the sweep, not the
+    tau 0.80 production model).
+    """
     global _FEATURES
     cfg = params()["opportunity_model"]
     tau = tau if tau is not None else cfg["tau"]
@@ -238,8 +246,9 @@ def fit_potential(train: pd.DataFrame, tau: float | None = None) -> tuple:
         log.warning("coverage is %.3f against a target of %.2f -- the quantile fit is "
                     "poorly converged and the frontier reading is weak.", coverage, tau)
 
-    record("potential_model", tau=tau, n_train=int(len(y)),
-           in_sample_coverage=round(coverage, 4), n_features=len(names))
+    if record_as:
+        record(record_as, tau=tau, n_train=int(len(y)),
+               in_sample_coverage=round(coverage, 4), n_features=len(names))
     return model, enc, names
 
 
@@ -269,6 +278,18 @@ def score_opportunity(df: pd.DataFrame, benchmarks: pd.DataFrame,
 
     out["potential_brand"] = out["potential_class"] * out["achievable_share"]
     out["opportunity"] = (out["potential_brand"] - out["brand_fills"]).clip(lower=0.0)
+
+    # NO OPPORTUNITY OUTSIDE THE MARKET.
+    #
+    # The frontier is fit on prescribers who write the class, so it says what a
+    # strong WRITER like this one reaches. Applied to a dermatologist who writes
+    # no anticoagulants it extrapolates a "potential" the data never supported
+    # -- and those extrapolations were 74% of all modelled opportunity. Every
+    # rule ranked on raw opportunity (H2 reach, the retargeting value, the
+    # reach curve) then filled half of a 60-rep list with non-writers. Turning
+    # a non-writer into a writer is new-writer acquisition, a different question
+    # with a different model; it is not scored here.
+    out.loc[out["class_fills"] <= 0, ["potential_brand", "opportunity"]] = 0.0
     out["opportunity_pct_of_potential"] = (
         out["opportunity"] / out["potential_brand"].replace(0, np.nan)
     ).fillna(0.0)
@@ -298,6 +319,20 @@ def score_opportunity(df: pd.DataFrame, benchmarks: pd.DataFrame,
              "computed within that universe",
              f"{int(in_market.sum()):,}", f"{len(out):,}")
     return out
+
+
+def hybrid_score(df: pd.DataFrame) -> pd.Series:
+    """The blended rule: mean of the opportunity and volume percentile ranks.
+
+    DECLARED ONCE, NOT TUNED. The back-test showed each pure rule wins one
+    outcome -- opportunity wins share-point growth, volume wins absolute fill
+    growth -- which is the classic "protect the core, convert the headroom"
+    trade-off a brand team actually faces. The equal-weight blend is the single
+    obvious compromise and is evaluated exactly as specified here; searching
+    over weights against the holdout year would be fitting to the test set.
+    Call on in-market prescribers only.
+    """
+    return (df["opportunity"].rank(pct=True) + df["class_fills"].rank(pct=True)) / 2.0
 
 
 def _decile(series: pd.Series) -> pd.Series:
@@ -352,17 +387,20 @@ def disagreement_matrix(scored: pd.DataFrame) -> pd.DataFrame:
 
 
 def crosscheck_against_sfa(train: pd.DataFrame, model, enc, n: int = 20_000) -> float:
-    """Rank-correlate the quantile frontier against a linear SFA approximation.
+    """Rank-correlate the quantile frontier against a corrected-OLS frontier.
 
-    Not a full maximum-likelihood SFA -- a corrected-OLS frontier, which is the
-    standard cheap approximation: fit OLS, then shift the intercept up by the
-    largest positive residual so the line envelops the data from above. If the
-    two rankings agree, the choice of quantile GBM is a convenience rather than
-    a load-bearing assumption, which is exactly what you want to be able to say.
+    Corrected OLS (COLS) is the textbook cheap stand-in for stochastic frontier
+    analysis: fit OLS, then shift the intercept up so the line envelops the data.
+    STATE PRECISELY WHAT THIS TESTS: an intercept shift does not change a
+    ranking, so the Spearman reported here is "a linear, additive frontier ranks
+    prescribers like the boosted quantile model does". That is the useful claim
+    -- the GBM's non-linearity is not doing anything exotic to the ordering --
+    but it is not a test of SFA's distributional assumptions, and it is not
+    called one.
     """
     sample = train.sample(min(n, len(train)), random_state=0)
     feat = build_features(sample)
-    X = feat[NUMERIC_FEATURES].to_numpy(dtype=float)
+    X = feat[_FEATURES].to_numpy(dtype=float)
     X = np.hstack([np.ones((len(X), 1)), X])
     y = np.log1p(feat["class_fills"].to_numpy(dtype=float))
 
@@ -419,9 +457,25 @@ def driver_importance(model, enc, df: pd.DataFrame, tau: float | None = None,
         log.warning("G2 RISK: the model is dominated by practice size. It is predicting "
                     "how many patients a prescriber has, not where the market is. "
                     "Add market covariates or raise tau before proceeding.")
+    # Grouped shares answer the real question -- is this a practice-size model
+    # or a market model? -- which no single feature's share can. An earlier
+    # README claimed the market covariates "carry real weight"; grouped, they
+    # carried ~4%. The groups are reported so the claim is read, not asserted.
+    imp["group"] = imp["feature"].map(_feature_group)
+    groups = imp.groupby("group")["share_of_total"].sum().round(4).to_dict()
+    log.info("importance by group: %s", groups)
     record("top_driver", feature=str(top["feature"]),
-           share=round(float(top["share_of_total"]), 4), method="permutation")
+           share=round(float(top["share_of_total"]), 4), method="permutation",
+           group_shares=groups)
     return imp
+
+
+def _feature_group(name: str) -> str:
+    if name.startswith("specialty_group_"):
+        return "specialty"
+    if name.startswith("region_") or name in OPTIONAL_FEATURES:
+        return "local market (geography + PLACES prevalence)"
+    return "practice size & patient mix"
 
 
 def run(fit_year: int | None = None) -> pd.DataFrame:
@@ -430,22 +484,29 @@ def run(fit_year: int | None = None) -> pd.DataFrame:
     fit_year = fit_year or p["years"]["train_end"]
     proc = path("processed")
 
-    metrics = read_parquet(proc / "mart_hcp_metrics.parquet")
+    mart = proc / "mart_hcp_metrics.parquet"
     benchmarks = read_parquet(proc / "mart_peer_benchmarks.parquet")
 
-    train = metrics[(metrics["year"] == fit_year) & (metrics["class_fills"] > 0)].copy()
+    # One year in memory at a time. The whole 4.1M-row mart plus a groupby copy
+    # of it exhausted RAM on a loaded laptop; nothing here needs two years at
+    # once.
+    current = read_parquet(mart, years=[fit_year])
+    train = current[current["class_fills"] > 0].copy()
     log.info("fitting potential model on %d prescribers from %d", len(train), fit_year)
 
-    model, enc, names = fit_potential(train)
+    model, enc, names = fit_potential(train, record_as="potential_model")
     crosscheck_against_sfa(train, model, enc)
 
     scored_frames = []
-    for _year, grp in metrics.groupby("year"):
+    for year in sorted(p["years"]["all"]):
+        grp = current if year == fit_year else read_parquet(mart, years=[year])
         scored_frames.append(score_opportunity(grp, benchmarks, model, enc))
+        del grp
     scored = pd.concat(scored_frames, ignore_index=True)
+    del scored_frames
 
-    current = scored[scored["year"] == fit_year]
-    disagreement_matrix(current).pipe(write_parquet, proc / "disagreement_matrix.parquet")
+    now = scored[scored["year"] == fit_year]
+    disagreement_matrix(now).pipe(write_parquet, proc / "disagreement_matrix.parquet")
     driver_importance(model, enc, train).pipe(write_parquet, proc / "shap_drivers.parquet")
     write_parquet(scored, proc / "hcp_scored.parquet")
     return scored

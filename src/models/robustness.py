@@ -34,7 +34,8 @@ from sklearn.preprocessing import StandardScaler
 
 from src.config import params, path
 from src.models import opportunity as opp
-from src.utils.io import get_logger, read_parquet, record, write_parquet
+from src.models.opportunity import hybrid_score
+from src.utils.io import get_logger, manifest, read_parquet, record, write_parquet
 
 log = get_logger(__name__)
 
@@ -53,8 +54,12 @@ def _metrics(df: pd.DataFrame, n_budget: int) -> dict[str, float]:
     total_abs = df.loc[df["brand_growth_abs"] > 0, "brand_growth_abs"].sum()
     total_share = df.loc[df["share_growth"] > 0, "share_growth"].sum()
 
+    rules = [("opportunity", "opportunity"), ("volume", "class_fills")]
+    if "hybrid" in df.columns:
+        rules.append(("hybrid", "hybrid"))
+
     out: dict[str, float] = {}
-    for rule, col in (("opportunity", "opportunity"), ("volume", "class_fills")):
+    for rule, col in rules:
         top = df.nlargest(n_budget, col)
         out[f"{rule}_abs"] = (float(top["brand_growth_abs"].clip(lower=0).sum() / total_abs)
                               if total_abs > 0 else np.nan)
@@ -65,22 +70,38 @@ def _metrics(df: pd.DataFrame, n_budget: int) -> dict[str, float]:
                           if out["volume_share"] else np.nan)
     out["abs_ratio"] = (out["opportunity_abs"] / out["volume_abs"]
                         if out["volume_abs"] else np.nan)
+    if "hybrid_abs" in out:
+        out["hybrid_abs_ratio"] = (out["hybrid_abs"] / out["volume_abs"]
+                                   if out["volume_abs"] else np.nan)
+        out["hybrid_share_ratio"] = (out["hybrid_share"] / out["volume_share"]
+                                     if out["volume_share"] else np.nan)
 
-    lift = df.groupby("opportunity_decile")["brand_growth_abs"].mean()
-    out["spearman"] = float(pd.Series(lift.index).corr(
-        pd.Series(lift.to_numpy()), method="spearman")) if len(lift) > 2 else np.nan
+    # PRESCRIBER-LEVEL rank correlation between opportunity and realised growth.
+    # The earlier figure correlated ten decile MEANS: with ten points the
+    # statistic takes a handful of values, its bootstrap interval collapsed onto
+    # the estimate ([0.879, 0.927] around 0.927), and it said little. This one
+    # uses every prescriber and has a real sampling distribution.
+    g = df["brand_growth_abs"]
+    ok = g.notna()
+    out["spearman"] = (float(df.loc[ok, "opportunity"].rank().corr(g[ok].rank()))
+                       if ok.sum() > 2 else np.nan)
     return out
 
 
-def bootstrap_headlines(df: pd.DataFrame, n_boot: int = N_BOOT) -> pd.DataFrame:
+def bootstrap_headlines(df: pd.DataFrame, n_boot: int = N_BOOT,
+                        n_budget: int | None = None,
+                        key: str = "bootstrap_headlines") -> pd.DataFrame:
     """Percentile bootstrap over prescribers.
 
     Resampling PRESCRIBERS, not deciles: the sampling unit is the thing that
     would differ in another draw of the world. Percentile intervals rather than
     normal-theory ones because the capture ratios are bounded and skewed, so a
     symmetric interval would put mass in impossible regions.
+
+    ``n_budget`` defaults to 20% of the frame (the gate's convention). run()
+    also calls it at the real 60-rep list size, because that is the decision.
     """
-    n_budget = max(int(0.20 * len(df)), 1)
+    n_budget = n_budget or max(int(0.20 * len(df)), 1)
     rng = np.random.default_rng(0)
 
     point = _metrics(df, n_budget)
@@ -127,7 +148,7 @@ def bootstrap_headlines(df: pd.DataFrame, n_boot: int = N_BOOT) -> pd.DataFrame:
                         "not as a point estimate.",
                         s["estimate"], s["ci_low"], s["ci_high"])
 
-    record("bootstrap_headlines", n_boot=n_boot, n_budget=n_budget,
+    record(key, n_boot=n_boot, n_budget=n_budget,
            **{r["metric"]: [r["ci_low"], r["estimate"], r["ci_high"]]
               for r in rows})
     return out
@@ -323,12 +344,12 @@ def propensity_matched_growth(df: pd.DataFrame, caliper: float = 0.2) -> dict:
 def run() -> dict:
     proc = path("processed")
     frame = read_parquet(proc / "backtest_frame.parquet")
-    metrics = read_parquet(proc / "mart_hcp_metrics.parquet")
+    fit_year = params()["years"]["train_end"]
+    metrics = read_parquet(proc / "mart_hcp_metrics.parquet", years=[fit_year])
     benchmarks = read_parquet(proc / "mart_peer_benchmarks.parquet")
 
     # backtest_frame carries only the columns the back-test needed; matching
     # wants the practice covariates too.
-    fit_year = params()["years"]["train_end"]
     extra = metrics[metrics["year"] == fit_year][
         ["npi", "panel_benes", "risk_score", "non_class_clms", "brand_share"]]
     frame = frame.merge(extra, on="npi", how="left", suffixes=("", "_m"))
@@ -340,8 +361,18 @@ def run() -> dict:
     log.info("=" * 70)
     log.info("1/3  BOOTSTRAP CONFIDENCE INTERVALS")
     log.info("=" * 70)
+    frame["hybrid"] = hybrid_score(frame)
     boot = bootstrap_headlines(frame)
     write_parquet(boot, proc / "robustness_bootstrap.parquet")
+
+    # The same intervals at the list size 60 reps can actually serve -- the
+    # decision the brand team is making. 20% of the universe is the gate's
+    # convention; ~3% is the real budget.
+    n60 = int((manifest().get("call_plan") or {}).get("n_targets") or 0)
+    if n60 > 0:
+        log.info("  ... and at the 60-rep list size (N=%s)", f"{n60:,}")
+        boot60 = bootstrap_headlines(frame, n_budget=n60, key="bootstrap_60rep")
+        write_parquet(boot60, proc / "robustness_bootstrap_60rep.parquet")
 
     log.info("=" * 70)
     log.info("2/3  TAU SENSITIVITY")

@@ -106,14 +106,21 @@ DRUG_COST = {
     "SAVAYSA": 430.0, "COUMADIN": 45.0, "JANTOVEN": 12.0,
 }
 
+# The EXACT legal names in config/manufacturers.yaml. The guessed spellings this
+# list used to carry ("Bristol-Myers Squibb Company", "Pfizer Inc.") never
+# matched the map, so every synthetic payment landed UNMAPPED and the synthetic
+# response model ran on zero focus-brand exposure without complaint.
+# The product (second field) is emitted as the payment's product name: a
+# fraction of each company's payments name some other product, as in reality.
 MANUFACTURERS = [
-    ("Bristol-Myers Squibb Company", "ELIQUIS"),
-    ("Pfizer Inc.", "ELIQUIS"),
-    ("Janssen Pharmaceuticals, Inc.", "XARELTO"),
+    ("E.R. Squibb & Sons, L.L.C.", "ELIQUIS"),
+    ("PFIZER INC.", "ELIQUIS"),
+    ("Janssen Pharmaceuticals, Inc", "XARELTO"),
     ("Bayer HealthCare Pharmaceuticals Inc.", "XARELTO"),
     ("Boehringer Ingelheim Pharmaceuticals, Inc.", "PRADAXA"),
-    ("Daiichi Sankyo, Inc.", "SAVAYSA"),
+    ("Daiichi Sankyo Inc.", "SAVAYSA"),
 ]
+OFF_CLASS_PRODUCT_SHARE = 0.45   # payments naming a non-anticoagulant product
 
 NATURES = [
     ("Food and Beverage", 0.74, 22.0),
@@ -272,12 +279,14 @@ def _simulate_panel(rng: np.random.Generator, pres: pd.DataFrame, years: list[in
         for idx in np.flatnonzero(paid_now):
             n_pay = 1 + rng.poisson(2.6)
             for _ in range(n_pay):
-                mfr, _brand = MANUFACTURERS[rng.integers(len(MANUFACTURERS))]
+                mfr, brand = MANUFACTURERS[rng.integers(len(MANUFACTURERS))]
+                if rng.random() < OFF_CLASS_PRODUCT_SHARE:
+                    brand = "OTHER PRODUCT"
                 nat_i = rng.choice(len(NATURES), p=[x[1] for x in NATURES])
                 nature, _p, scale = NATURES[nat_i]
                 payment_rows.append((
                     int(pres["npi"].iat[idx]), mfr, nature,
-                    round(float(rng.exponential(scale) + 8.0), 2), year,
+                    round(float(rng.exponential(scale) + 8.0), 2), year, brand,
                 ))
 
         # --- brand share dynamics -------------------------------------------
@@ -297,7 +306,8 @@ def _simulate_panel(rng: np.random.Generator, pres: pd.DataFrame, years: list[in
         }))
 
     panel = pd.concat(frames, ignore_index=True)
-    payments = pd.DataFrame(payment_rows, columns=["npi", "manufacturer", "nature", "amount", "year"])
+    payments = pd.DataFrame(payment_rows,
+                            columns=["npi", "manufacturer", "nature", "amount", "year", "product"])
     return panel, payments
 
 
@@ -478,6 +488,12 @@ def generate(n_prescribers: int = 40_000, n_units: int = 620, seed: int = 42,
         "Nature_of_Payment_or_Transfer_of_Value": pay["nature"],
         "Total_Amount_of_Payment_USDollars": pay["amount"],
         "Program_Year": pay["year"],
+        # Same product fields the real extract keeps (see download.py).
+        "Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_1": pay["product"],
+        "Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_2": "",
+        "Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_3": "",
+        "Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_4": "",
+        "Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_5": "",
     })
     for year in yrs:
         sub = op[op["Program_Year"] == year]
