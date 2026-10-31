@@ -28,6 +28,10 @@
   --mauve-ink: #8a5f6c;   /* mauve dark enough for text on blush (4.6:1) */
   --terracotta: #c75a3a;
   --terracotta-hi: #e0764f;
+  /* Terracotta for TEXT and for fills behind white text. The brand #c75a3a is
+     3.5:1 on blush paper -- fine for marks and display type (3:1), short of
+     the 4.5:1 that small text needs. */
+  --terracotta-ink: #a8452a;
   --blush: #f3e6e1;
 
   /* ---- Story chassis (dark plum) ---------------------------------------- */
@@ -49,15 +53,16 @@
   --rule: #e2cdc8;
   --rule-soft: #efe0db;
   --ink: #3a1f34;
-  --ink-mute: #765a6b;
-  --ink-faint: #8f7382;
-  --signal: #c75a3a;
+  /* faint was 3.5:1 on paper; both now clear 4.5:1 on paper and panel. */
+  --ink-mute: #684c5d;
+  --ink-faint: #785c6c;
+  --signal: #a8452a;
   --flag: #c75a3a;
 
   /* ---- Semantic. NEVER art-directed. ------------------------------------ */
-  --pos: #4c7d5a;
+  --pos: #3e6c4b;
   --neg: #a3263e;
-  --warn: #b7791f;
+  --warn: #855510;
   --info: #6b4c7a;
 
   /* ---- The live act accent (story mode cross-fades these). --------------- */
@@ -281,8 +286,8 @@
   }
   .chip:hover { border-color: var(--mauve); color: var(--ink); }
   .chip[aria-pressed="true"] {
-    background: var(--terracotta);
-    border-color: var(--terracotta);
+    background: var(--terracotta-ink);
+    border-color: var(--terracotta-ink);
     color: #fff;
   }
 
@@ -398,3 +403,18 @@
   .marquee, .blob, .pulse-ring { animation: none; }
 }
 
+
+/* ---- print ------------------------------------------------------------
+   The call list is printed for the car. Drop navigation, controls and the
+   paper grain; keep the table on white with ink-dark text. */
+.print-only { display: none; }
+@media print {
+  nav, .no-print, [href="#main"] { display: none !important; }
+  .print-only { display: block; }
+  body, .grain, main { background: #fff !important; color: #1a1014 !important; }
+  .grain::before, .grain::after { display: none !important; }
+  main { padding: 0 !important; max-width: none !important; animation: none !important; }
+  .card { box-shadow: none !important; border: 1px solid #ccc !important; break-inside: avoid; }
+  tr { break-inside: avoid; }
+  a { text-decoration: none; }
+}

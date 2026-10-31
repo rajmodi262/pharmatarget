@@ -83,7 +83,7 @@ export function PilotPower({ pilot }: { pilot: PilotDesign }) {
         <>
           <div className="mb-1 font-semibold">{mo} months</div>
           <TipRow label={`Power, ${endpoint === "share" ? "share pts" : "fills"}`}
-            value={pct(powerAt(ep, pilot, s, mo), 0)} color="var(--terracotta)" />
+            value={pct(powerAt(ep, pilot, s, mo), 0)} color="var(--terracotta-ink)" />
           <TipRow label={`Power, ${endpoint === "share" ? "fills" : "share pts"}`}
             value={pct(powerAt(other, pilot, s, mo), 0)} color="var(--mauve)" />
         </>

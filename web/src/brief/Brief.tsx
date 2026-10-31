@@ -172,7 +172,7 @@ function SlideView({ sl, k, n }: { sl: Slide; k: number; n: number }) {
         <span className="flex items-center gap-3">
           <span className="eyebrow" style={sl.dark ? { color: "var(--mauve)" } : undefined}>{sl.eyebrow}</span>
           {sl.kind && <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-            style={{ background: "color-mix(in oklab, var(--terracotta) 14%, transparent)", color: "var(--terracotta)" }}>{sl.kind}</span>}
+            style={{ background: "color-mix(in oklab, var(--terracotta) 14%, transparent)", color: "var(--terracotta-ink)" }}>{sl.kind}</span>}
         </span>
         <span className="num text-[12px] text-ink-faint">{String(k + 1).padStart(2, "0")} / {String(n).padStart(2, "0")}</span>
       </header>
@@ -196,7 +196,7 @@ function SlideView({ sl, k, n }: { sl: Slide; k: number; n: number }) {
       {sl.soWhat && (
         <p className="mt-6 rounded-xl border-l-4 px-5 py-3 text-[15px]"
           style={{ borderColor: "var(--terracotta)", background: "var(--rule-soft)" }}>
-          <strong className="mr-3 text-[11px] uppercase tracking-[0.14em]" style={{ color: "var(--terracotta)" }}>So what</strong>
+          <strong className="mr-3 text-[11px] uppercase tracking-[0.14em]" style={{ color: "var(--terracotta-ink)" }}>So what</strong>
           {sl.soWhat}
         </p>
       )}

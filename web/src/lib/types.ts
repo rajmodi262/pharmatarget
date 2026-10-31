@@ -588,5 +588,50 @@ export interface DataScienceResponse {
   contracts: ContractRow[];
 }
 
-export interface ExplanationRow { rank: number; feature: string; label: string; contribution: number; multiplier: number; value: string }
+export interface ExplanationRow {
+  rank: number; feature: string; label: string; contribution: number; multiplier: number; value: string;
+  /** The value in human units (log1p counts undone), formatted by the API. */
+  display?: string;
+}
 export interface ForecastRow { forecast_year: number; p_active: number; brand_fills_pred: number; brand_fills_lo: number; brand_fills_hi: number }
+
+/* ---------------------------------------------------------------- call list */
+
+export interface CallListOption {
+  territory: number;
+  n_hcps: number;
+  n_targets: number;
+  workload: number;
+  opportunity: number;
+  states: string;
+}
+
+export interface CallListRow {
+  priority: number;
+  npi: number;
+  last_name: string | null;
+  first_name: string | null;
+  city: string | null;
+  state: string | null;
+  zip3: string | null;
+  specialty_group: string | null;
+  class_fills: number | null;
+  brand_share: number | null;
+  opportunity: number | null;
+  opportunity_decile: number | null;
+  calls_per_month: number | null;
+  is_target: boolean;
+  why: string | null;
+  forecast_lo: number | null;
+  forecast_mid: number | null;
+  forecast_hi: number | null;
+  p_active: number | null;
+}
+
+export interface CallListResponse {
+  n_reps: number;
+  options: CallListOption[];
+  territory: CallListOption | null;
+  targets_only?: boolean;
+  rows: CallListRow[];
+}

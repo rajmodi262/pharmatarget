@@ -125,7 +125,7 @@ export function MatrixViz({ cells }: { cells: DisagreementCell[] }) {
         <Tooltip tip={tip} width={width} />
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <Callout color="var(--terracotta)" value={pct(skipped / total)} label={`of ${METRIC_LABEL[metric].toLowerCase()} the volume rule skips`} />
+        <Callout color="var(--terracotta-ink)" value={pct(skipped / total)} label={`of ${METRIC_LABEL[metric].toLowerCase()} the volume rule skips`} />
         <Callout color="var(--plum)" value={pct(over / total)} label={`of ${METRIC_LABEL[metric].toLowerCase()} it over-serves`} />
       </div>
     </div>

@@ -15,7 +15,7 @@ import type { ReachPoint } from "@/lib/types";
 import { Toggle, Tooltip, TipRow, linePath, svgPoint, useWidth, last, type Tip } from "./core";
 
 const SERIES: { rule: ReachPoint["rule"]; color: string; label: string; dash?: string; w: number }[] = [
-  { rule: "opportunity", color: "var(--terracotta)", label: "Opportunity", w: 3 },
+  { rule: "opportunity", color: "var(--terracotta-ink)", label: "Opportunity", w: 3 },
   { rule: "volume", color: "var(--plum)", label: "Volume (today)", w: 2.4 },
   { rule: "geography", color: "var(--mauve-ink)", label: "Geography", dash: "5 4", w: 2 },
 ];

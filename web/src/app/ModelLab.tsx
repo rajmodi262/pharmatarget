@@ -38,7 +38,7 @@ export function ModelLab() {
       <header className="mb-10">
         <p className="eyebrow">Model Lab · data science</p>
         <h1 className="display mt-2 text-[clamp(2.4rem,5vw,4.4rem)]">
-          Every model, <span style={{ color: "var(--terracotta)" }}>stress-tested</span>.
+          Every model, <span style={{ color: "var(--terracotta-ink)" }}>stress-tested</span>.
         </h1>
         <p className="serif-i mt-3 max-w-[64ch] text-[20px] leading-snug text-ink-mute">
           Baselines, ranking metrics, calibrated uncertainty, error analysis, causal ML, uplift,
@@ -314,7 +314,7 @@ function Section({ n: num, title, kind, head, children }: {
   return (
     <Reveal as="section" className="card mb-8 p-6 sm:p-8">
       <div className="mb-1 flex items-center gap-3">
-        <span className="display text-[28px]" style={{ color: "var(--terracotta)" }}>{num}</span>
+        <span className="display text-[28px]" style={{ color: "var(--terracotta-ink)" }}>{num}</span>
         <EvidencePill kind={kind} />
       </div>
       <SectionHead eyebrow={title} title={head} />
@@ -326,7 +326,7 @@ function Section({ n: num, title, kind, head, children }: {
 function Stat({ v, k }: { v: ReactNode; k: string }) {
   return (
     <div className="card p-4">
-      <div className="num text-[24px] font-semibold leading-tight" style={{ color: "var(--terracotta)" }}>{v}</div>
+      <div className="num text-[24px] font-semibold leading-tight" style={{ color: "var(--terracotta-ink)" }}>{v}</div>
       <div className="mt-1 text-micro text-ink-mute normal-case tracking-normal">{k}</div>
     </div>
   );
