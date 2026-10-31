@@ -1,0 +1,75 @@
+# Data contracts -- what every table a model reads must satisfy.
+#
+# Checked by src/ds/contracts.py with DuckDB (no table is loaded into pandas),
+# as a pipeline stage between the marts and the models. A failure stops the
+# pipeline: a model trained on a silently broken mart produces numbers that
+# look exactly as plausible as correct ones.
+#
+# Per table:
+#   min_rows      floor on row count (a truncated download fails here)
+#   key           columns that must be unique together
+#   columns       name -> {type: numeric|text, nullable: max null fraction,
+#                          min / max: inclusive bounds}
+#   rules         SQL boolean expressions that must hold for every row
+
+mart_hcp_metrics:
+  min_rows: 1000000
+  key: [npi, year]
+  columns:
+    npi: {type: numeric, nullable: 0.0}
+    year: {type: numeric, nullable: 0.0, min: 2022, max: 2024}
+    class_fills: {type: numeric, nullable: 0.0, min: 0}
+    class_fills_observed: {type: numeric, nullable: 0.0, min: 0}
+    brand_fills: {type: numeric, nullable: 0.0, min: 0}
+    brand_share: {type: numeric, nullable: 0.85, min: 0, max: 1}
+    panel_benes: {type: numeric, nullable: 0.5, min: 0}
+    # HCC risk scores average ~1. The first run of this contract (bound 20)
+    # flagged 5 of 4.1M rows up to 27.4: genuine panels of very sick patients
+    # (dialysis-heavy nephrology), not corruption. Bound set to 40 on that basis.
+    risk_score: {type: numeric, nullable: 0.5, min: 0, max: 40}
+    specialty_group: {type: text, nullable: 0.0}
+    region: {type: text, nullable: 0.05}
+  rules:
+    - "brand_fills <= class_fills_observed + 0.5"
+    - "class_fills_observed <= class_fills + 0.5"
+
+hcp_scored:
+  min_rows: 1000000
+  key: [npi, year]
+  columns:
+    npi: {type: numeric, nullable: 0.0}
+    opportunity: {type: numeric, nullable: 0.0, min: 0}
+    potential_class: {type: numeric, nullable: 0.0, min: 0}
+    opportunity_decile: {type: numeric, nullable: 0.0, min: 0, max: 10}
+    volume_decile: {type: numeric, nullable: 0.0, min: 0, max: 10}
+  rules:
+    - "class_fills > 0 OR opportunity = 0"
+    - "potential_class >= class_fills - 0.5"
+
+mart_payments:
+  min_rows: 100000
+  key: [npi, year]
+  columns:
+    npi: {type: numeric, nullable: 0.0}
+    pay_total: {type: numeric, nullable: 0.0, min: 0}
+    pay_focus: {type: numeric, nullable: 0.0, min: 0}
+    pay_food_count_focus: {type: numeric, nullable: 0.0, min: 0}
+  rules:
+    - "pay_focus <= pay_total + 0.01"
+
+hcp_call_plan:
+  min_rows: 1000000
+  key: [npi]
+  columns:
+    calls_per_month: {type: numeric, nullable: 0.0, min: 0, max: 8}
+    opportunity: {type: numeric, nullable: 0.0, min: 0}
+  rules:
+    - "NOT is_target OR class_fills > 0"
+    - "NOT is_target OR calls_per_month > 0"
+
+territory_assignments:
+  min_rows: 500
+  key: [alignment, n_reps, unit]
+  columns:
+    territory: {type: numeric, nullable: 0.0, min: 0}
+    workload: {type: numeric, nullable: 0.0, min: 0}
