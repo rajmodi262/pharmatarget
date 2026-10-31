@@ -13,81 +13,85 @@
 /* ========================================================================== */
 
 :root {
-  /* ---- Story chassis (dark) --------------------------------------------- */
-  /* Blue-black, not pure black: #000 makes type edges shimmer on OLED and
-     reads as cheap. This holds. */
-  --void: #06080b;
-  --ground: #0a0e14;
-  --surface: #10161f;
-  --surface-2: #18202b;
-  --hairline: #1f2937;
-  --hairline-hi: #2e3b4e;
+  /* ======================================================================
+     PALETTE -- three colours, everything else derived from them.
+         DEEP PLUM   #3A1F34   ink, structure, the dark chassis
+         DUSTY MAUVE #C3A0A7   secondary data, quiet surfaces
+         TERRACOTTA  #C75A3A   the signal: the one thing to look at
+     The paper is the palette's own blush, so the page reads as one material
+     rather than a white screen with coloured stickers on it.
+     ====================================================================== */
+  --plum: #3a1f34;
+  --plum-2: #4d2a45;
+  --mauve: #c3a0a7;
+  --mauve-soft: #e4ccd0;
+  --mauve-ink: #8a5f6c;   /* mauve dark enough for text on blush (4.6:1) */
+  --terracotta: #c75a3a;
+  --terracotta-hi: #e0764f;
+  --blush: #f3e6e1;
 
-  --text-hi: #f2f6fa;
-  --text: #c8d3e0;
-  --text-mute: #7c8a9c;
-  --text-faint: #75859A;
+  /* ---- Story chassis (dark plum) ---------------------------------------- */
+  --void: #12080f;
+  --ground: #1a0d17;
+  --surface: #24131f;
+  --surface-2: #2f1a29;
+  --hairline: #3d2537;
+  --hairline-hi: #573650;
 
-  /* ---- Tool chassis (light) -- "chart paper" ---------------------------- */
-  --paper: #fbfcfd;
-  --panel: #ffffff;
-  --rule: #e1e7ee;
-  --rule-soft: #f1f5f9;
-  --ink: #101b2b;
-  --ink-mute: #5d6b7e;
-  --ink-faint: #94a3b4;
-  --signal: #0057c7;
-  --flag: #c2410c;
+  --text-hi: #f8eeea;
+  --text: #e5d2d3;
+  --text-mute: #b89aa5;
+  --text-faint: #957784;
 
-  /* ---- Semantic. NEVER art-directed. A warning looks like a warning in
-     every act, or it is not a warning. ------------------------------------ */
-  --pos: #17a673;
-  --neg: #c2410c;
-  --warn: #b45309;
-  --info: #2563eb;
+  /* ---- Tool chassis (light) -- "blush paper" ---------------------------- */
+  --paper: #f3e6e1;
+  --panel: #fbf5f2;
+  --rule: #e2cdc8;
+  --rule-soft: #efe0db;
+  --ink: #3a1f34;
+  --ink-mute: #765a6b;
+  --ink-faint: #8f7382;
+  --signal: #c75a3a;
+  --flag: #c75a3a;
 
-  /* ---- The live act accent. Story mode transitions THESE THREE, which is
-     why every accent-coloured element shifts together in one cross-fade
-     instead of needing a class swap per node. ----------------------------- */
-  --accent-core: #1e5fd9;
-  --accent-glow: #5b9bff;
-  --accent-wash: rgba(30, 95, 217, 0.1);
+  /* ---- Semantic. NEVER art-directed. ------------------------------------ */
+  --pos: #4c7d5a;
+  --neg: #a3263e;
+  --warn: #b7791f;
+  --info: #6b4c7a;
+
+  /* ---- The live act accent (story mode cross-fades these). --------------- */
+  --accent-core: #c75a3a;
+  --accent-glow: #f08a66;
+  --accent-wash: rgba(199, 90, 58, 0.1);
   transition: --accent-core 900ms, --accent-glow 900ms, --accent-wash 900ms;
 
-  /* ---- Act accent worlds ------------------------------------------------ */
-  /* ACT 1 NOISE -- cold, inert, unresolved */
-  --a1-core: #4c7a8c;  --a1-glow: #7fd4ee;  --a1-wash: rgba(76, 122, 140, 0.08);
-  /* ACT 2 OPPORTUNITY -- the signal appears */
-  --a2-core: #1e5fd9;  --a2-glow: #5b9bff;  --a2-wash: rgba(30, 95, 217, 0.1);
-  /* ACT 3 DISAGREEMENT -- two views in tension */
-  --a3-core: #7b4dd8;  --a3-glow: #a98bff;  --a3-wash: rgba(123, 77, 216, 0.1);
-  --a3-alt: #c77a22;   --a3-alt-glow: #f0b45c;
-  /* ACT 4 PROOF -- validation */
-  --a4-core: #0f8f6b;  --a4-glow: #45d9a8;  --a4-wash: rgba(15, 143, 107, 0.1);
-  /* ACT 5 MONEY -- warm, material */
-  --a5-core: #b8862b;  --a5-glow: #f2c56b;  --a5-wash: rgba(184, 134, 43, 0.1);
-  /* ACT 6 TERRITORY -- spatial */
-  --a6-core: #d14a6a;  --a6-glow: #ff89a3;  --a6-wash: rgba(209, 74, 106, 0.1);
-  /* ACT 7 LEDGER -- deliberately colourless. The absence reads as candour. */
+  /* ---- Act accent worlds: all drawn from the palette -------------------- */
+  --a1-core: #c3a0a7;  --a1-glow: #ead0d5;  --a1-wash: rgba(195, 160, 167, 0.08);
+  --a2-core: #c75a3a;  --a2-glow: #f08a66;  --a2-wash: rgba(199, 90, 58, 0.1);
+  --a3-core: #9c6b8a;  --a3-glow: #d7a6c4;  --a3-wash: rgba(156, 107, 138, 0.1);
+  --a3-alt: #c75a3a;   --a3-alt-glow: #f08a66;
+  --a4-core: #6f9a7a;  --a4-glow: #a9d3b2;  --a4-wash: rgba(111, 154, 122, 0.1);
+  --a5-core: #c98b3c;  --a5-glow: #f2c27a;  --a5-wash: rgba(201, 139, 60, 0.1);
+  --a6-core: #d06a5a;  --a6-glow: #ff9c88;  --a6-wash: rgba(208, 106, 90, 0.1);
 
   /* ---- Decile ramps ----------------------------------------------------- */
-  /* OPPORTUNITY: chromatic and alive. The ranking this project argues FOR. */
-  --d1: #eef3f8;  --d2: #dce6f1;  --d3: #c4d6ea;  --d4: #a6c2e0;  --d5: #83aad4;
-  --d6: #5f91c7;  --d7: #4176b4;  --d8: #2a5c9b;  --d9: #17437b;  --d10: #0a2c5c;
+  /* OPPORTUNITY: blush -> terracotta -> plum. Chromatic and alive. */
+  --d1: #f5e8e3;  --d2: #efd5cb;  --d3: #e7bbaa;  --d4: #de9d85;  --d5: #d27e61;
+  --d6: #c75a3a;  --d7: #a4442f;  --d8: #7e3330;  --d9: #5e2236;  --d10: #45193b;
 
-  /* VOLUME: neutral and inert. The industry default this project argues
-     AGAINST. Two ramps is rhetoric -- the viewer absorbs the argument before
-     reading a word. It also guarantees colour-blind safety, which is the
-     functional justification for the same choice. NEVER give volume a hue. */
-  --v1: #f5f5f4;  --v2: #e7e5e4;  --v3: #d6d3d1;  --v4: #bfbbb8;  --v5: #a8a29e;
-  --v6: #8c8681;  --v7: #736d68;  --v8: #57514d;  --v9: #3d3835;  --v10: #26221f;
+  /* VOLUME: mauve-greys. Neutral and inert -- the default this project
+     argues against. NEVER give volume the terracotta. */
+  --v1: #f3eeec;  --v2: #e6dedc;  --v3: #d5caca;  --v4: #c0b3b5;  --v5: #a99a9e;
+  --v6: #908086;  --v7: #77686e;  --v8: #5e5157;  --v9: #463b41;  --v10: #2f272c;
+
+  /* ---- Elevation: warm, low, never grey ---------------------------------- */
+  --shadow-1: 0 1px 0 rgba(58, 31, 52, 0.04), 0 10px 30px -18px rgba(58, 31, 52, 0.35);
+  --shadow-2: 0 1px 0 rgba(58, 31, 52, 0.05), 0 24px 60px -28px rgba(58, 31, 52, 0.55);
 
   /* ---- Type ------------------------------------------------------------- */
-  /* Self-hosted from /public/fonts (see fonts.css) -- 196 KB, Latin only.
-     The fallbacks are chosen to be genuinely usable rather than filler:
-     Iowan/Georgia carry real contrast, so the display voice survives if the
-     webfont is still in flight on first paint. */
-  --font-display: "Instrument Serif", "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --font-display: "Playfair Display", "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
   --font-ui: "Inter Tight", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
@@ -96,18 +100,18 @@
   --t-h1: clamp(1.6rem, 2.4vw, 2.25rem);
   --t-h2: clamp(1.25rem, 1.7vw, 1.5rem);
   --t-h3: 1.0625rem;
-  --t-body: 0.9375rem; /* 15px -- denser than default, on purpose */
+  --t-body: 0.9375rem;
   --t-small: 0.8125rem;
   --t-micro: 0.6875rem;
 
   --gutter: clamp(16px, 4vw, 64px);
-  --rail: 220px;
+  --rail: 240px;
 
   color-scheme: light;
 }
 
-@property --accent-core { syntax: "<color>"; inherits: true; initial-value: #1e5fd9; }
-@property --accent-glow { syntax: "<color>"; inherits: true; initial-value: #5b9bff; }
+@property --accent-core { syntax: "<color>"; inherits: true; initial-value: #c75a3a; }
+@property --accent-glow { syntax: "<color>"; inherits: true; initial-value: #f08a66; }
 
 /* Story mode flips the chassis. Applied to <html> so the transition covers
    every descendant at once -- this is the mode transition in §7.9. */
@@ -180,7 +184,7 @@
   }
 
   ::selection {
-    background: var(--accent-core);
+    background: var(--terracotta);
     color: #fff;
   }
 
@@ -202,37 +206,174 @@
 /* ========================================================================== */
 
 @layer components {
-  /* Tool surfaces carry NO shadow. Shadows on a data tool read as consumer
-     software; the hairline is the structural device instead. */
   .card {
     background: var(--panel);
     border: 1px solid var(--rule);
-    border-radius: 6px;
+    border-radius: 16px;
+    box-shadow: var(--shadow-1);
+  }
+
+  /* The plum slab: the dark editorial panel for the one exhibit per page that
+     carries the argument. It re-points the ink tokens, so every component
+     inside it (charts included) reads correctly on plum without a prop. */
+  .slab {
+    background:
+      radial-gradient(120% 80% at 100% 0%, rgba(199, 90, 58, 0.28), transparent 55%),
+      radial-gradient(90% 70% at 0% 100%, rgba(195, 160, 167, 0.18), transparent 60%),
+      var(--plum);
+    color: var(--text-hi);
+    border-radius: 20px;
+    box-shadow: var(--shadow-2);
+    --ink: var(--text-hi);
+    --ink-mute: var(--text-mute);
+    --ink-faint: var(--text-faint);
+    --rule: rgba(248, 238, 234, 0.14);
+    --rule-soft: rgba(248, 238, 234, 0.07);
+    --panel: #2a1625;
   }
 
   .eyebrow {
     font-size: var(--t-micro);
-    letter-spacing: 0.08em;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--ink-mute);
+    font-weight: 600;
+  }
+
+  .display {
+    font-family: var(--font-display);
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    line-height: 0.95;
+  }
+
+  .serif-i {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  /* Paper grain: an SVG noise tile so flat colour reads as stock. */
+  .grain { position: relative; isolation: isolate; }
+  .grain::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.07;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .23 0 0 0 0 .12 0 0 0 0 .2 0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: var(--t-small);
     font-weight: 500;
+    border: 1px solid var(--rule);
+    color: var(--ink-mute);
+    background: var(--panel);
+    transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: pointer;
+  }
+  .chip:hover { border-color: var(--mauve); color: var(--ink); }
+  .chip[aria-pressed="true"] {
+    background: var(--terracotta);
+    border-color: var(--terracotta);
+    color: #fff;
+  }
+
+  /* Range input in the palette: terracotta fill, blush thumb. */
+  .range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 22px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .range::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--terracotta) var(--fill, 50%), var(--rule) var(--fill, 50%));
+  }
+  .range::-moz-range-track { height: 4px; border-radius: 4px; background: var(--rule); }
+  .range::-moz-range-progress { height: 4px; border-radius: 4px; background: var(--terracotta); }
+  .range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    margin-top: -7px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--blush);
+    border: 4px solid var(--terracotta);
+    box-shadow: 0 2px 10px rgba(199, 90, 58, 0.45);
+    transition: transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .range:active::-webkit-slider-thumb { transform: scale(1.25); }
+  .range::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--blush);
+    border: 4px solid var(--terracotta);
   }
 
   .skeleton {
-    background: linear-gradient(
-      90deg,
-      var(--rule-soft) 25%,
-      var(--rule) 50%,
-      var(--rule-soft) 75%
-    );
+    background: linear-gradient(90deg, var(--rule-soft) 25%, var(--rule) 50%, var(--rule-soft) 75%);
     background-size: 200% 100%;
     animation: shimmer 1.4s ease-in-out infinite;
-    border-radius: 4px;
+    border-radius: 8px;
   }
+
+  /* Entrance: elements rise in once, when first scrolled into view. */
+  .reveal {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
+                transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .reveal.in { opacity: 1; transform: none; }
+
+  .draw-path {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    transition: stroke-dashoffset 1600ms cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  .in .draw-path { stroke-dashoffset: 0; }
+
+  .pulse-ring {
+    animation: pulse-ring 2.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  .marquee {
+    display: flex;
+    width: max-content;
+    animation: marquee 48s linear infinite;
+  }
+
+  .blob { animation: float-blob 14s ease-in-out infinite; }
 
   @keyframes shimmer {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
+  }
+  @keyframes pulse-ring {
+    0% { transform: scale(0.6); opacity: 0.9; }
+    100% { transform: scale(2.6); opacity: 0; }
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  @keyframes float-blob {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(4%, -6%) scale(1.08); }
   }
 }
 
@@ -252,5 +393,8 @@
     transition-duration: 0.01ms !important;
   }
   .skeleton { animation: none; background: var(--rule-soft); }
+  .reveal { opacity: 1; transform: none; }
+  .draw-path { stroke-dashoffset: 0; }
+  .marquee, .blob, .pulse-ring { animation: none; }
 }
 

@@ -36,20 +36,20 @@ interface Act {
 }
 
 const ACTS: Act[] = [
-  { id: "problem",  eyebrow: "The default",   kind: "ARITHMETIC",   layout: "noise",  accent: "#4C7A8C", glow: "#7FD4EE" },
-  { id: "model",    eyebrow: "The method",    kind: "ARITHMETIC",   layout: "volume", accent: "#1E5FD9", glow: "#5B9BFF" },
-  { id: "disagree", eyebrow: "Exhibit E1",    kind: "ARITHMETIC",   layout: "split",  accent: "#7B4DD8", glow: "#A98BFF" },
-  { id: "proof",    eyebrow: "Back-test",     kind: "BACK-TESTED",  layout: "ignite", accent: "#0F8F6B", glow: "#45D9A8" },
-  { id: "money",    eyebrow: "Sizing",        kind: "SCENARIO",     layout: "ignite", accent: "#B8862B", glow: "#F2C56B" },
-  { id: "map",      eyebrow: "Exhibit E5",    kind: "ARITHMETIC",   layout: "geo",    accent: "#D14A6A", glow: "#FF89A3" },
-  { id: "ledger",   eyebrow: "Limitations",   kind: "LIMITS",       layout: "geo",    accent: "#5D6B7E", glow: "#8FA0B4" },
+  { id: "problem",  eyebrow: "The default",   kind: "ARITHMETIC",   layout: "noise",  accent: "#C3A0A7", glow: "#EAD0D5" },
+  { id: "model",    eyebrow: "The method",    kind: "ARITHMETIC",   layout: "volume", accent: "#C75A3A", glow: "#F08A66" },
+  { id: "disagree", eyebrow: "Exhibit E1",    kind: "ARITHMETIC",   layout: "split",  accent: "#9C6B8A", glow: "#D7A6C4" },
+  { id: "proof",    eyebrow: "Back-test",     kind: "BACK-TESTED",  layout: "ignite", accent: "#6F9A7A", glow: "#A9D3B2" },
+  { id: "money",    eyebrow: "Sizing",        kind: "SCENARIO",     layout: "ignite", accent: "#C98B3C", glow: "#F2C27A" },
+  { id: "map",      eyebrow: "Exhibit E5",    kind: "ARITHMETIC",   layout: "geo",    accent: "#D06A5A", glow: "#FF9C88" },
+  { id: "ledger",   eyebrow: "Limitations",   kind: "LIMITS",       layout: "geo",    accent: "#957784", glow: "#B89AA5" },
 ];
 
 const PILL: Record<Act["kind"], { label: string; fg: string; bg: string }> = {
-  "BACK-TESTED": { label: "Back-tested", fg: "#45D9A8", bg: "rgba(69,217,168,.14)" },
-  ARITHMETIC:    { label: "Arithmetic",  fg: "#7FB2FF", bg: "rgba(127,178,255,.14)" },
-  SCENARIO:      { label: "Scenario",    fg: "#F2C56B", bg: "rgba(242,197,107,.14)" },
-  LIMITS:        { label: "Limitations", fg: "#94A3B4", bg: "rgba(148,163,180,.12)" },
+  "BACK-TESTED": { label: "Back-tested", fg: "#A9D3B2", bg: "rgba(169,211,178,.14)" },
+  ARITHMETIC:    { label: "Arithmetic",  fg: "#EAD0D5", bg: "rgba(234,208,213,.14)" },
+  SCENARIO:      { label: "Scenario",    fg: "#F2C27A", bg: "rgba(242,194,122,.14)" },
+  LIMITS:        { label: "Limitations", fg: "#B89AA5", bg: "rgba(184,154,165,.12)" },
 };
 
 /* --------------------------------------------------------------- helpers */
@@ -208,7 +208,7 @@ export function Story() {
 
   return (
     <div
-      className="relative bg-[#06080B] text-[#C8D3E0]"
+      className="relative bg-[#12080F] text-[#E5D2D3]"
       style={{
         // One variable drives every accent-coloured element in the act, so the
         // whole frame shifts hue in a single transition.
@@ -279,10 +279,10 @@ export function Story() {
                     body="A quantile-regression frontier at τ=0.80 — not the average prescriber like you, the strong one. Panel size, patient risk, local stroke and coronary prevalence. Opportunity is the gap between that and what the brand already has."
                     stats={[
                       ["Frontier coverage", stat(meta.data?.potential_model?.["in_sample_coverage"])],
-                      ["SFA cross-check ρ", stat(meta.data?.sfa_crosscheck?.["spearman"])],
-                      ["Practice size share", pct(meta.data?.shap_top_driver?.share, 0)],
+                      ["Linear-frontier ρ", stat(meta.data?.sfa_crosscheck?.["spearman"])],
+                      ["Top driver share", pct(meta.data?.shap_top_driver?.share, 0)],
                     ]}
-                    note="Cross-checked against a stochastic-frontier approximation — the two rank prescribers almost identically."
+                    note="A linear frontier ranks prescribers similarly. Practice size and patient mix drive the model; geography adds little."
                   />
                 )}
 
@@ -301,13 +301,13 @@ export function Story() {
                 {act.id === "proof" && (
                   <ActCopy
                     head="Then I checked whether it was actually right."
-                    body={`Fit on ${meta.data?.years.train_start}–${meta.data?.years.train_end}, frozen, scored against ${meta.data?.years.holdout} — a year the model never saw in any form.`}
+                    body={`Fit on ${meta.data?.years.train_end ?? "––"}, frozen, scored against ${meta.data?.years.holdout ?? "––"} — a year the model never saw in any form.`}
                     stats={[
-                      ["vs matched controls", "1.50×"],
+                      ["vs matched controls", mult(h1?.matched_growth_ratio)],
                       ["Share-growth capture", mult(h1?.share_growth_ratio)],
                       ["Spearman", stat(h1?.decile_spearman)],
                     ]}
-                    caveat="Volume wins on absolute growth (0.73×), and that is expected — a prescriber writing 400 fills can gain 40; one writing 40 cannot. Absolute growth scales with baseline volume, so the criterion is the volume-neutral one, chosen before the model was fit."
+                    caveat={`Volume wins on absolute growth (${mult(h1?.absolute_growth_ratio)}), and that is expected — a prescriber writing 400 fills can gain 40; one writing 40 cannot. Absolute growth scales with baseline volume, so the criterion is the volume-neutral one, chosen before the model was fit.`}
                   />
                 )}
 
@@ -339,10 +339,10 @@ export function Story() {
 
                 {act.id === "ledger" && (
                   <div>
-                    <h2 className="font-display text-[clamp(1.6rem,2.4vw,2.25rem)] leading-tight text-[#F2F6FA]">
+                    <h2 className="font-display text-[clamp(1.6rem,2.4vw,2.25rem)] leading-tight text-[#F8EEEA]">
                       What this cannot tell you.
                     </h2>
-                    <ol className="mt-5 max-w-[62ch] list-decimal space-y-2 pl-5 text-[13px] leading-relaxed text-[#7C8A9C]">
+                    <ol className="mt-5 max-w-[62ch] list-decimal space-y-2 pl-5 text-[13px] leading-relaxed text-[#B89AA5]">
                       {(meta.data?.limitations ?? []).slice(0, 6).map((l) => (
                         <li key={l}>{l}</li>
                       ))}
@@ -350,13 +350,13 @@ export function Story() {
                     <div className="mt-7 flex flex-wrap gap-3">
                       <Link
                         to="/app"
-                        className="rounded border border-[#2E3B4E] px-4 py-2 text-[13px] text-[#F2F6FA] transition-colors duration-150 hover:border-[color:var(--glow)] hover:text-[color:var(--glow)]"
+                        className="rounded border border-[#573650] px-4 py-2 text-[13px] text-[#F8EEEA] transition-colors duration-150 hover:border-[color:var(--glow)] hover:text-[color:var(--glow)]"
                       >
                         Open the tool →
                       </Link>
                       <Link
                         to="/app/method"
-                        className="rounded px-4 py-2 text-[13px] text-[#7C8A9C] transition-colors duration-150 hover:text-[#C8D3E0]"
+                        className="rounded px-4 py-2 text-[13px] text-[#B89AA5] transition-colors duration-150 hover:text-[#E5D2D3]"
                       >
                         Read the method
                       </Link>
@@ -398,15 +398,15 @@ function ActCopy({ head, body, stats, caveat, note }: {
 }) {
   return (
     <div>
-      <h2 className="font-display text-[clamp(1.9rem,3.4vw,3rem)] leading-[1.15] tracking-[-0.02em] text-[#F2F6FA]">
+      <h2 className="font-display text-[clamp(1.9rem,3.4vw,3rem)] leading-[1.15] tracking-[-0.02em] text-[#F8EEEA]">
         {head}
       </h2>
-      <p className="mt-4 max-w-[46ch] text-[14px] leading-relaxed text-[#8C99AB]">{body}</p>
+      <p className="mt-4 max-w-[46ch] text-[14px] leading-relaxed text-[#C4A9B2]">{body}</p>
 
       <div className="mt-7 flex flex-wrap gap-x-10 gap-y-4">
         {stats.map(([label, value]) => (
           <div key={label}>
-            <div className="text-[10px] uppercase tracking-[0.1em] text-[#5D6B7E]">{label}</div>
+            <div className="text-[10px] uppercase tracking-[0.1em] text-[#957784]">{label}</div>
             <div
               className="num mt-1 text-[26px] font-semibold leading-none tracking-tight"
               style={{ color: "var(--glow)" }}
@@ -418,12 +418,12 @@ function ActCopy({ head, body, stats, caveat, note }: {
       </div>
 
       {caveat && (
-        <p className="mt-6 max-w-[54ch] border-l-2 border-[#C2410C] pl-3 text-[12px] leading-relaxed text-[#9AA7B8]">
+        <p className="mt-6 max-w-[54ch] border-l-2 border-[#C75A3A] pl-3 text-[12px] leading-relaxed text-[#C4A9B2]">
           {caveat}
         </p>
       )}
       {note && (
-        <p className="mt-4 text-[11px] text-[#75859A]">{note}</p>
+        <p className="mt-4 text-[11px] text-[#957784]">{note}</p>
       )}
     </div>
   );
@@ -432,16 +432,16 @@ function ActCopy({ head, body, stats, caveat, note }: {
 function StoryNav({ index }: { index: number }) {
   return (
     <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between px-6 py-4">
-      <span className="text-[13px] font-semibold tracking-tight text-[#F2F6FA]">
+      <span className="text-[13px] font-semibold tracking-tight text-[#F8EEEA]">
         PharmaTarget
       </span>
       <div className="flex items-center gap-4">
-        <span className="num text-[11px] text-[#75859A]">
+        <span className="num text-[11px] text-[#957784]">
           {String(index + 1).padStart(2, "0")} / {String(ACTS.length).padStart(2, "0")}
         </span>
         <Link
           to="/app"
-          className="rounded border border-[#1F2937] px-3 py-1.5 text-[12px] text-[#7C8A9C] transition-colors duration-150 hover:border-[color:var(--glow)] hover:text-[color:var(--glow)]"
+          className="rounded border border-[#3D2537] px-3 py-1.5 text-[12px] text-[#B89AA5] transition-colors duration-150 hover:border-[color:var(--glow)] hover:text-[color:var(--glow)]"
         >
           Skip to the tool
         </Link>
@@ -472,7 +472,7 @@ function ActProgress({ index, progress, onJump }: {
           // where precision is cheap. Only the rule inside it is ever visible.
           className="group relative h-11 flex-1 cursor-pointer bg-transparent p-0 sm:h-5"
         >
-          <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 overflow-hidden bg-[#1F2937] transition-all duration-150 group-hover:h-[3px]">
+          <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 overflow-hidden bg-[#3D2537] transition-all duration-150 group-hover:h-[3px]">
             <span
               className="block h-full"
               style={{
@@ -491,7 +491,7 @@ function ActProgress({ index, progress, onJump }: {
 function ScrollHint({ visible }: { visible: boolean }) {
   return (
     <div
-      className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 text-[11px] uppercase tracking-[0.2em] text-[#75859A]"
+      className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 text-[11px] uppercase tracking-[0.2em] text-[#957784]"
       style={{ opacity: visible ? 1 : 0, transition: "opacity 400ms" }}
     >
       Scroll

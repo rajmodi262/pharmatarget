@@ -10,7 +10,7 @@
  */
 
 import type {
-  BacktestResponse, CallPlanResponse, HcpDetail, HcpPage, MetaResponse,
+  BacktestResponse, CallPlanResponse, DataScienceResponse, DecisionResponse, HcpDetail, HcpPage, MetaResponse,
   ResponseModuleResponse, SegmentsResponse, SizingResponse, Summary,
   TerritoriesResponse,
 } from "./types";
@@ -122,8 +122,11 @@ export const api = {
   sizing: () => get<SizingResponse>("/api/sizing"),
   segments: () => get<SegmentsResponse>("/api/segments"),
   responseModule: () => get<ResponseModuleResponse>("/api/response"),
+  decision: () => get<DecisionResponse>("/api/decision"),
+  datascience: () => get<DataScienceResponse>("/api/datascience"),
 
-  territories: (n_reps: number, alignment: "optimised" | "baseline" = "optimised") =>
+  territories: (n_reps: number,
+    alignment: "optimised" | "baseline" | "kmeans" = "optimised") =>
     get<TerritoriesResponse>("/api/territories", { n_reps, alignment }),
 
   /**
@@ -146,5 +149,7 @@ export const qk = {
   sizing: ["sizing"] as const,
   segments: ["segments"] as const,
   response: ["response"] as const,
+  decision: ["decision"] as const,
+  datascience: ["datascience"] as const,
   territories: (n: number, a: string) => ["territories", n, a] as const,
 };

@@ -37,15 +37,16 @@ export interface FieldData {
   lon: number[];
 }
 
-/** Chromatic ramp -- the ranking this project argues FOR. */
+/** Chromatic ramp -- the ranking this project argues FOR. Dim plum to hot
+ * terracotta, so on the dark stage high opportunity is what glows. */
 const OPP_RAMP = [
-  "#EEF3F8", "#DCE6F1", "#C4D6EA", "#A6C2E0", "#83AAD4",
-  "#5F91C7", "#4176B4", "#2A5C9B", "#17437B", "#0A2C5C",
+  "#4A2C42", "#5E3550", "#77405A", "#8F4C5C", "#A95758",
+  "#C2614D", "#D86E47", "#E8845D", "#F4A27F", "#FFC9AE",
 ];
 /** Neutral ramp -- the industry default it argues AGAINST. */
 const VOL_RAMP = [
-  "#3A3A38", "#474542", "#57534E", "#66615C", "#767068",
-  "#8C8681", "#A29C96", "#B8B2AC", "#CFC9C3", "#E7E1DB",
+  "#3A2C35", "#46363F", "#55444C", "#655359", "#766468",
+  "#8A787C", "#9F8E91", "#B5A5A8", "#CBBDBF", "#E2D6D7",
 ];
 
 export type ActLayout = "noise" | "volume" | "split" | "ignite" | "geo";
@@ -149,16 +150,16 @@ export function ParticleField({
             + (rnd(i, 8) - 0.5) * (half / 13);
           st.ty[i] = pad + rnd(i, 9) * ih;
           st.colour[i] = moved
-            ? (onRight ? (OPP_RAMP[od - 1] ?? "#5F91C7") : "#C77A22")
-            : "rgba(90,102,118,0.16)";
+            ? (onRight ? (OPP_RAMP[od - 1] ?? "#C2614D") : "#C3A0A7")
+            : "rgba(150,110,130,0.16)";
         } else if (l === "ignite") {
           // Opportunity-ranked; the top three deciles bloom, the rest recede.
           const col = od - 1;
           st.tx[i] = pad + (col + 0.5) * (iw / 10) + (rnd(i, 10) - 0.5) * (iw / 11);
           st.ty[i] = pad + rnd(i, 11) * ih;
           st.colour[i] = od >= 8
-            ? (OPP_RAMP[col] ?? "#0A2C5C")
-            : "rgba(90,102,118,0.13)";
+            ? (OPP_RAMP[col] ?? "#FFC9AE")
+            : "rgba(150,110,130,0.13)";
         } else {
           // Geographic. Equirectangular with a cos(lat) correction -- honest
           // enough at CONUS scale and free of a projection dependency.
@@ -168,7 +169,7 @@ export function ParticleField({
           const sc = Math.min(iw, ih * 1.7);
           st.tx[i] = W / 2 + (nx - 0.5) * sc;
           st.ty[i] = H / 2 + (ny - 0.5) * sc * 0.58;
-          st.colour[i] = OPP_RAMP[od - 1] ?? "#4176B4";
+          st.colour[i] = OPP_RAMP[od - 1] ?? "#D86E47";
         }
       }
       st.layout = l;
@@ -186,7 +187,7 @@ export function ParticleField({
       // of 24,000. This is the difference between 60fps and 12.
       const buckets = new Map<string, number[]>();
       for (let i = 0; i < n; i++) {
-        const c = st.colour[i] ?? "#5F91C7";
+        const c = st.colour[i] ?? "#C2614D";
         let b = buckets.get(c);
         if (!b) { b = []; buckets.set(c, b); }
         b.push(i);
