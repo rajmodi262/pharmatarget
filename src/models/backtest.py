@@ -6,10 +6,10 @@ this predicts something and then checks.
 
 PROTOCOL
 --------
-    fit      on 2021-2022 only
+    fit      on the 2023 cross-section only (params.yaml: train_end)
     freeze   the model and the resulting opportunity scores
-    score    against actual 2023 branded volume growth -- a year the model has
-             never seen in any form
+    score    against actual 2023 -> 2024 branded growth -- 2024 is a year the
+             model has never seen in any form
 
 Three comparisons, in increasing order of how hard they are to argue with:
 
@@ -57,7 +57,7 @@ def build_holdout_frame() -> pd.DataFrame:
     fit_year, holdout_year = p["years"]["train_end"], p["years"]["holdout"]
     proc = path("processed")
 
-    metrics = read_parquet(proc / "mart_hcp_metrics.parquet")
+    metrics = read_parquet(proc / "mart_hcp_metrics.parquet", years=[fit_year, holdout_year])
     benchmarks = read_parquet(proc / "mart_peer_benchmarks.parquet")
 
     train = metrics[(metrics["year"] == fit_year) & (metrics["class_fills"] > 0)].copy()
@@ -67,7 +67,7 @@ def build_holdout_frame() -> pd.DataFrame:
     # Refit explicitly here rather than reusing opportunity.run()'s model. The
     # extra 12 seconds buys certainty that no holdout-year information reached
     # the fit through a shared object.
-    model, enc, _ = opp.fit_potential(train)
+    model, enc, _ = opp.fit_potential(train, record_as="potential_model_backtest")
     scored = opp.score_opportunity(train, benchmarks, model, enc)
 
     future = (metrics[metrics["year"] == holdout_year]

@@ -37,13 +37,38 @@ def write_parquet(df: pd.DataFrame, target: Path, label: str | None = None) -> P
     target = Path(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(target, index=False)
-    record(label or target.stem, rows=len(df), cols=df.shape[1], path=str(target.relative_to(ROOT)))
+    # Namespaced. Artifact shapes used to share the key space with model
+    # verdicts, so writing response_saturation.parquet silently replaced the
+    # response module's own `response_saturation` record (identifiability,
+    # ceiling, CI) with a row count -- and the same for backtest_misses.
+    try:
+        rel = str(target.resolve().relative_to(ROOT))
+    except ValueError:
+        rel = str(target)
+    record(f"artifact:{label or target.stem}", rows=len(df), cols=df.shape[1], path=rel)
     log.info("wrote %-34s %8d rows x %2d cols", target.name, len(df), df.shape[1])
     return target
 
 
-def read_parquet(target: Path) -> pd.DataFrame:
-    return pd.read_parquet(target)
+def read_parquet(target: Path, columns: list[str] | None = None,
+                 years: list[int] | None = None, lean: bool = True) -> pd.DataFrame:
+    """Read a parquet, optionally projecting columns and pushing a year filter down.
+
+    LEAN BY DEFAULT. The prescriber-year tables are 4.1M rows x 30-40 columns;
+    read whole as float64 they need 1-2 GB each, and a stage that held two of
+    them failed with MemoryError on a 16 GB laptop running a browser. Column
+    projection and the year filter are pushed into pyarrow (nothing unneeded
+    is ever materialised), and float64 is downcast to float32 -- seven
+    significant digits is far more precision than any fill count or share in
+    this project carries.
+    """
+    filters = [("year", "in", list(years))] if years is not None else None
+    df = pd.read_parquet(target, columns=columns, filters=filters)
+    if lean:
+        f64 = df.select_dtypes(include="float64").columns
+        if len(f64):
+            df[f64] = df[f64].astype("float32")
+    return df
 
 
 def record(key: str, **fields) -> None:

@@ -73,7 +73,8 @@ def build_panel() -> pd.DataFrame:
     t, t1 = p["train_end"], p["holdout"]
     proc = path("processed")
 
-    metrics = read_parquet(proc / "mart_hcp_metrics.parquet")
+    metrics = read_parquet(proc / "mart_hcp_metrics.parquet", years=[t, t1],
+                           columns=["npi", "year", "class_fills", "brand_share", "brand_fills"])
     payments = read_parquet(proc / "mart_payments.parquet")
 
     base = metrics[(metrics["year"] == t) & (metrics["class_fills"] > 0)][
@@ -81,8 +82,12 @@ def build_panel() -> pd.DataFrame:
     nxt = metrics[metrics["year"] == t1][["npi", "brand_share", "brand_fills"]].rename(
         columns={"brand_share": "brand_share_next", "brand_fills": "brand_fills_next"})
 
-    calls = payments[payments["year"] == t][["npi", "pay_food_count"]].rename(
-        columns={"pay_food_count": "calls"})
+    # FOCUS-BRAND visits only. The all-manufacturer count this used to read
+    # treated a Pfizer vaccine lunch and a Janssen Xarelto detail as Eliquis
+    # calls -- the second pushes share the WRONG way. Food events that name the
+    # focus product (SQL 05) are the defensible proxy for "our rep was here".
+    col = "pay_food_count_focus" if "pay_food_count_focus" in payments else "pay_food_count"
+    calls = payments[payments["year"] == t][["npi", col]].rename(columns={col: "calls"})
 
     df = base.merge(nxt, on="npi", how="inner").merge(calls, on="npi", how="left")
     df["calls"] = df["calls"].fillna(0).clip(upper=MAX_CALLS)
@@ -105,7 +110,7 @@ def build_panel() -> pd.DataFrame:
     return df
 
 
-def stratified_curve(df: pd.DataFrame) -> pd.DataFrame:
+def stratified_curve(df: pd.DataFrame, quiet: bool = False) -> pd.DataFrame:
     """Mean captured-headroom by call count, within volume strata, then pooled.
 
     Removing the stratum mean at zero calls is what turns a raw correlation into
@@ -141,13 +146,21 @@ def stratified_curve(df: pd.DataFrame) -> pd.DataFrame:
         weighted=("weighted", "sum"), n=("n", "sum"))
     agg["captured_excess"] = agg["weighted"] / agg["n"]
     pooled = agg[["calls", "captured_excess", "n"]].sort_values("calls").reset_index(drop=True)
-    log.info("dose-response: %d call levels, %s prescribers pooled across %d strata",
-             len(pooled), f"{int(pooled['n'].sum()):,}", cell["vol_decile"].nunique())
+    if not quiet:
+        log.info("dose-response: %d call levels, %s prescribers pooled across %d strata",
+                 len(pooled), f"{int(pooled['n'].sum()):,}", cell["vol_decile"].nunique())
     return pooled
 
 
-def fit_hill(pooled: pd.DataFrame, n_boot: int = N_BOOT) -> dict:
-    """Fit ceiling and half-saturation with a weighted bootstrap CI."""
+def fit_hill(pooled: pd.DataFrame, n_boot: int = N_BOOT,
+             panel: pd.DataFrame | None = None) -> dict:
+    """Fit ceiling and half-saturation with a bootstrap CI.
+
+    With ``panel`` the bootstrap resamples PRESCRIBERS and rebuilds the pooled
+    curve each draw -- the sampling unit that would actually differ in another
+    year. Without it (unit tests), it resamples the pooled call levels, which
+    treats ~19 aggregated points as the data and understates uncertainty.
+    """
     x = pooled["calls"].to_numpy(dtype=float)
     y = pooled["captured_excess"].to_numpy(dtype=float)
     w = pooled["n"].to_numpy(dtype=float)
@@ -167,10 +180,19 @@ def fit_hill(pooled: pd.DataFrame, n_boot: int = N_BOOT) -> dict:
     rng = np.random.default_rng(0)
     boots = []
     for _ in range(n_boot):
-        idx = rng.integers(0, len(x), len(x))
+        if panel is not None:
+            draw = panel.iloc[rng.integers(0, len(panel), len(panel))]
+            pb = stratified_curve(draw, quiet=True)
+            if len(pb) < 4:
+                continue
+            bx = pb["calls"].to_numpy(dtype=float)
+            by = pb["captured_excess"].to_numpy(dtype=float)
+            bw = pb["n"].to_numpy(dtype=float)
+        else:
+            idx = rng.integers(0, len(x), len(x))
+            bx, by, bw = x[idx], y[idx], w[idx]
         try:
-            b, _ = curve_fit(hill, x[idx], y[idx], p0=popt,
-                             sigma=1.0 / np.sqrt(w[idx]),
+            b, _ = curve_fit(hill, bx, by, p0=popt, sigma=1.0 / np.sqrt(bw),
                              bounds=([0.0, 0.5], [1.0, 60.0]), maxfev=8000)
             boots.append(b)
         except (RuntimeError, ValueError):
@@ -195,11 +217,30 @@ def fit_hill(pooled: pd.DataFrame, n_boot: int = N_BOOT) -> dict:
         "weighted_r2": round(float(r2), 4),
         "n_levels": int(len(x)),
         "n_prescribers": int(pooled["n"].sum()),
-        "identified_from": "Open Payments food-and-beverage event count (rep-visit proxy)",
+        "identified_from": ("Open Payments food-and-beverage events naming the focus "
+                            "brand (rep-visit proxy)"),
+        "bootstrap_unit": "prescriber" if panel is not None else "call level",
+        "n_boot_ok": int(len(boots)),
         "caveat": ("Observational. Volume-decile stratification removes the dominant "
                    "confounder but reps still select within a stratum on information "
                    "the model cannot see. Treat the ceiling as an UPPER BOUND."),
     }
+
+    # IDENTIFIABLE OR NOT. A fit that lands on a bound is not a measurement: a
+    # ceiling pinned at 0, a half-saturation pinned at the 60-call ceiling, or a
+    # curve that explains less than the mean (R^2 <= 0) all say "no detectable
+    # dose-response in this proxy". That is a finding -- and on brand-named
+    # visits it is the real-data result -- but it must not be priced as if it
+    # were a measured zero effect of calling. sizing.py branches on this flag.
+    identifiable = bool(ceiling > 1e-4 and half < 59.9 and np.isfinite(r2) and r2 > 0)
+    res["identifiable"] = identifiable
+    if not identifiable:
+        res["reason"] = ("no detectable dose-response: fit sits on a parameter bound "
+                         f"(ceiling {ceiling:.4f}, half-saturation {half:.1f}) with "
+                         f"weighted R^2 {r2:.3f}")
+        log.warning("CALL RESPONSE NOT IDENTIFIABLE from the proxy: %s. Sizing will not "
+                    "price headcount on it; it reports the response a rep would NEED "
+                    "instead.", res["reason"])
 
     log.info("FITTED call-response curve:")
     log.info("  ceiling            %.4f of headroom  [%.4f, %.4f]",
@@ -223,7 +264,7 @@ def run() -> dict:
         return {"fitted": False}
 
     write_parquet(pooled, proc / "call_response_curve.parquet")
-    res = fit_hill(pooled)
+    res = fit_hill(pooled, n_boot=200, panel=df[["vol_decile", "calls", "captured"]])
     return res
 
 
