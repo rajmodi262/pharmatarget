@@ -28,6 +28,9 @@ web/dist/
 !web/dist/**
 .vite/
 
+# runner log
+data/run.log
+
 # OS / editor
 .DS_Store
 Thumbs.db
@@ -46,6 +49,7 @@ dataset/
 # coverage artifacts
 .coverage
 .coverage.*
+coverage.xml
 htmlcov/
 
 # MLflow local tracking store
