@@ -67,6 +67,30 @@ VIEWS = {
     "sizing_roi_curve": "roi_curve",
     "sizing_tornado": "tornado",
     "sizing_pnl": "pnl",
+    "sizing_required_response": "required_response",
+    "decision_frontier": "decision_frontier",
+    "decision_value_grid": "value_grid",
+    # Data-science layer (src/ds).
+    "ds_ladder": "ds_ladder",
+    "ds_gain_curves": "ds_gain_curves",
+    "ds_conformal_coverage": "ds_conformal_coverage",
+    "ds_calibration": "ds_calibration",
+    "ds_hurdle_calibration": "ds_hurdle_calibration",
+    "ds_error_segments": "ds_error_segments",
+    "ds_representation": "ds_representation",
+    "ds_causal": "ds_causal",
+    "ds_uplift_qini": "ds_uplift_qini",
+    "ds_uplift_value_deciles": "ds_uplift_value_deciles",
+    "ds_shap_global": "ds_shap_global",
+    "ds_ablation": "ds_ablation",
+    "ds_drift": "ds_drift",
+    "ds_network": "ds_network",
+    "ds_shrinkage_h2h": "ds_shrinkage_h2h",
+    "ds_shrinkage_funnel": "ds_shrinkage_funnel",
+    "ds_contract_results": "ds_contract_results",
+    "ds_explanations": "ds_explanations",
+    "ds_forecast": "ds_forecast",
+    "ds_uplift_scores": "ds_uplift_scores",
     "territory_stats": "territory_stats",
     "territory_summary": "territory_summary",
     "territory_assignments": "territory_assignments",
@@ -111,19 +135,31 @@ def connect() -> duckdb.DuckDBPyConnection:
         return _con
 
 
+# ONE CURSOR PER QUERY. FastAPI runs sync endpoints in a thread pool, and a
+# DuckDB connection object is not safe to share across threads: two requests on
+# the shared connection interleaved, and one got the other's result set
+# (observed as "zip() argument 2 is longer than argument 1" on the first page
+# load, which fires six endpoints at once). `cursor()` returns a new handle onto
+# the same in-memory database -- same views, no copy, independent state.
 def has_view(view: str) -> bool:
-    con = connect()
-    rows = con.execute(
-        "SELECT count(*) FROM duckdb_views() WHERE view_name = ?", [view]
-    ).fetchone()
-    return bool(rows and rows[0])
+    cur = connect().cursor()
+    try:
+        rows = cur.execute(
+            "SELECT count(*) FROM duckdb_views() WHERE view_name = ?", [view]
+        ).fetchone()
+        return bool(rows and rows[0])
+    finally:
+        cur.close()
 
 
 def query(sql: str, params: list | None = None) -> list[dict]:
-    con = connect()
-    cur = con.execute(sql, params or [])
-    cols = [d[0] for d in cur.description]
-    return [dict(zip(cols, row, strict=True)) for row in cur.fetchall()]
+    cur = connect().cursor()
+    try:
+        cur.execute(sql, params or [])
+        cols = [d[0] for d in cur.description]
+        return [dict(zip(cols, row, strict=True)) for row in cur.fetchall()]
+    finally:
+        cur.close()
 
 
 def query_one(sql: str, params: list | None = None) -> dict | None:

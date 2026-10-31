@@ -77,6 +77,12 @@ def summary() -> dict:
     terr, g3 = m.get("territory_headline", {}), m.get("gate_g3", {})
     h2h = m.get("backtest_head_to_head", {})
     plan, dis = m.get("call_plan", {}), m.get("disagreement", {})
+    psm, boot = m.get("propensity_matched", {}), m.get("bootstrap_headlines", {})
+    rules = {r.get("rule"): r for r in (m.get("challenger") or {}).get("results", [])}
+
+    def _ci(key: str) -> list | None:
+        v = boot.get(key)
+        return v if isinstance(v, list) and len(v) == 3 else None
 
     return {
         "data_mode": db.data_mode(),
@@ -105,6 +111,25 @@ def summary() -> dict:
                 "caveat": g3.get("note"),
                 "opportunity_pct_of_share_growth": h2h.get("opportunity_pct_of_share_growth"),
                 "volume_pct_of_share_growth": h2h.get("volume_pct_of_share_growth"),
+                # [low, estimate, high] from the prescriber bootstrap.
+                "share_growth_ratio_ci": _ci("share_ratio"),
+                "absolute_growth_ratio_ci": _ci("abs_ratio"),
+                "spearman_ci": _ci("spearman"),
+                # Propensity-matched comparison: the headline, five covariates.
+                "matched_growth_ratio": psm.get("growth_ratio"),
+                "matched_paired_difference": psm.get("paired_difference"),
+                "matched_ci": [psm.get("ci_low"), psm.get("ci_high")],
+                "matched_pairs": psm.get("n_pairs"),
+            },
+            # Realised 2023->2024 outcomes of each rule's 60-rep list. Not
+            # causal, but observed -- and the place the trade-off is visible.
+            "business_case": {
+                "class": "BACK-TESTED",
+                "n_budget": (m.get("challenger") or {}).get("n_budget"),
+                "rules": {k: {f: v.get(f) for f in
+                              ("abs_capture", "share_capture", "net_brand_fill_growth",
+                               "median_base_class_fills")}
+                          for k, v in rules.items()},
             },
             "h2": {
                 "class": "ARITHMETIC",
@@ -118,15 +143,25 @@ def summary() -> dict:
             },
             "h3": {
                 "class": "SCENARIO",
-                "claim": "Marginal-rep economics imply the force is under-sized.",
+                "claim": "Marginal-rep economics, priced through the fitted response "
+                         "curve: where the next rep stops paying for itself.",
                 "current_n_reps": h3.get("current_n_reps"),
                 "break_even_n_reps": h3.get("break_even_n_reps"),
-                "rep_gap": h3.get("rep_gap"),
+                "recommended_n_reps": h3.get("recommended_n_reps"),
                 "marginal_roi_at_current": h3.get("marginal_roi_at_current"),
                 "incremental_profit": h3.get("incremental_profit"),
                 "sensitivity_range": [h3.get("sensitivity_low"), h3.get("sensitivity_high")],
                 "caveat": h3.get("label"),
+                # False when the call response is not identifiable from public
+                # data: break-even/ROI above are then ILLUSTRATIVE, and the
+                # decision-relevant number is the required response.
+                "response_identified": h3.get("response_identified", True),
+                "required_ceiling_at_current": h3.get("required_ceiling_at_current"),
             },
+            "recommendation": m.get("recommendation", {}),
+            "retargeting": {k: m.get("retargeting_value", {}).get(k) for k in
+                            ("hybrid_vs_volume_contribution", "delta_contribution",
+                             "priced_at", "label")},
         },
         "disagreement": dis,
         "territory": terr,
@@ -164,6 +199,11 @@ def list_hcps(
         args.append(specialty)
     if targets_only:
         where.append("is_target")
+    if segment and db.has_view("hcp_segments"):
+        # Accepted and documented since v1 but never applied -- a filter that
+        # silently returns the unfiltered list is worse than no filter.
+        where.append("npi IN (SELECT npi FROM hcp_segments WHERE segment = ?)")
+        args.append(segment)
     if q:
         where.append("(CAST(npi AS VARCHAR) LIKE ? OR last_name LIKE ?)")
         args += [f"{q}%", f"{q.upper()}%"]
@@ -209,8 +249,19 @@ def hcp_detail(npi: int) -> dict:
     seg = db.query_one("SELECT segment FROM hcp_segments WHERE npi = ?", [npi]) \
         if db.has_view("hcp_segments") else None
 
+    explanation = db.query(
+        """SELECT rank, feature, label, contribution, multiplier, value
+           FROM ds_explanations WHERE npi = ? ORDER BY rank""", [npi]
+    ) if db.has_view("ds_explanations") else []
+    forecast = db.query_one(
+        "SELECT forecast_year, p_active, brand_fills_pred, brand_fills_lo, brand_fills_hi "
+        "FROM ds_forecast WHERE npi = ?", [npi]) if db.has_view("ds_forecast") else None
+    uplift = db.query_one("SELECT cate, propensity FROM ds_uplift_scores WHERE npi = ?", [npi]) \
+        if db.has_view("ds_uplift_scores") else None
+
     return {"hcp": row, "trend": trend, "payments": pay,
-            "segment": (seg or {}).get("segment")}
+            "segment": (seg or {}).get("segment"),
+            "explanation": explanation, "forecast": forecast, "uplift": uplift}
 
 
 # --------------------------------------------------------------------------- #
@@ -289,8 +340,106 @@ def sizing() -> dict:
         "tornado": db.query("SELECT * FROM tornado ORDER BY swing DESC"),
         "pnl": db.query("SELECT * FROM pnl") if db.has_view("pnl") else [],
         "headline": manifest().get("headline_h3", {}),
-        "assumptions": {k: v for k, v in economics().items() if k != "sizing"},
+        "retargeting": manifest().get("retargeting_value", {}),
+        "assumptions": {k: v for k, v in _assumptions_in_use(manifest()).items()
+                        if k != "sizing"},
     }
+
+
+# Publicly reported 2026 Medicare negotiated price (Inflation Reduction Act,
+# CMS, August 2024) for the focus brand's 30-day supply. Used ONLY as a named
+# scenario on the decision lab's revenue slider, never in a base-case figure.
+IRA_2026_PRICE_PER_FILL = 231.0
+
+
+@app.get("/api/decision", tags=["analytics"])
+def decision() -> dict:
+    """Inputs for the decision lab: blend frontier, headcount explorer, pilot sizing.
+
+    Everything the page computes interactively is linear in its sliders --
+    marginal ROI and retargeting value both scale with the response ceiling and
+    with revenue per fill -- so the browser can recompute exactly from these
+    pre-computed anchors instead of re-running a model per drag.
+    """
+    _require("decision_frontier")
+    m = manifest()
+    econ_ = economics()
+    return {
+        "frontier": db.query("SELECT * FROM decision_frontier ORDER BY period, weight"),
+        "frontier_summary": m.get("decision_frontier", {}),
+        "recommendation": m.get("recommendation", {}),
+        "pilot": m.get("pilot_design", {}),
+        "required_response": db.query(
+            "SELECT * FROM required_response ORDER BY n_reps")
+        if db.has_view("required_response") else [],
+        "retargeting": m.get("retargeting_value", {}),
+        "headline": m.get("headline_h3", {}),
+        "business_case": m.get("business_case_value", {}),
+        "value_grid": db.query("SELECT * FROM value_grid ORDER BY n_reps")
+        if db.has_view("value_grid") else [],
+        "economics": {
+            "net_revenue_per_30day_fill": econ_["net_revenue_per_30day_fill"],
+            "contribution_margin": econ_["contribution_margin"],
+            "rep_cost_annual": econ_["rep_cost_annual"],
+            "ira_2026_price_per_fill": IRA_2026_PRICE_PER_FILL,
+        },
+    }
+
+
+# The steering-committee pack, downloadable from the app. A fixed allow-list:
+# the route never takes a path from the request.
+DOWNLOADS = {
+    "executive": ("PharmaTarget_Executive.pdf", "10-slide executive deck"),
+    "onepager": ("PharmaTarget_OnePager.pdf", "One-page decision memo"),
+    "full": ("PharmaTarget_Recommendations.pdf", "Full analysis deck (appendix)"),
+}
+
+
+@app.get("/api/download/{name}", tags=["overview"])
+def download(name: str):
+    if name not in DOWNLOADS:
+        raise HTTPException(404, f"unknown document '{name}'")
+    fname, _ = DOWNLOADS[name]
+    f = ROOT / "outputs" / fname
+    if not f.exists():
+        raise HTTPException(503, f"{fname} not built -- run python -m src.report.make_assets")
+    return FileResponse(f, media_type="application/pdf", filename=fname)
+
+
+DS_TABLES = {
+    "ladder": "SELECT * FROM ds_ladder ORDER BY value_capture DESC",
+    "gain_curves": "SELECT * FROM ds_gain_curves ORDER BY rule, fraction_targeted",
+    "coverage": "SELECT * FROM ds_conformal_coverage",
+    "calibration": "SELECT * FROM ds_calibration ORDER BY bin",
+    "hurdle_calibration": "SELECT * FROM ds_hurdle_calibration ORDER BY bin",
+    "errors": "SELECT * FROM ds_error_segments",
+    "representation": "SELECT * FROM ds_representation",
+    "causal": "SELECT * FROM ds_causal",
+    "qini": "SELECT * FROM ds_uplift_qini ORDER BY fraction_targeted",
+    "uplift_deciles": "SELECT * FROM ds_uplift_value_deciles ORDER BY decile",
+    "shap_global": "SELECT * FROM ds_shap_global ORDER BY mean_abs_shap DESC",
+    "ablation": "SELECT * FROM ds_ablation",
+    "drift": "SELECT * FROM ds_drift",
+    "network": "SELECT * FROM ds_network",
+    "shrinkage_h2h": "SELECT * FROM ds_shrinkage_h2h",
+    "shrinkage_funnel": "SELECT * FROM ds_shrinkage_funnel",
+    "contracts": "SELECT * FROM ds_contract_results",
+}
+DS_KEYS = ("ds_shrinkage", "ds_evaluation", "ds_conformal", "ds_errors", "ds_causal",
+           "ds_uplift", "ds_explain", "ds_ablation", "ds_drift", "ds_contracts", "ds_network")
+
+
+@app.get("/api/datascience", tags=["analytics"])
+def datascience() -> dict:
+    """Everything the Model Lab shows: evaluation, uncertainty, causal ML,
+    uplift, explanations, ablations, drift, contracts and the practice network."""
+    _require("ds_ladder")
+    m = manifest()
+    tables = {}
+    for key, sql in DS_TABLES.items():
+        view = sql.split(" FROM ")[1].split()[0]
+        tables[key] = db.query(sql) if db.has_view(view) else []
+    return {"summary": {k.removeprefix("ds_"): m.get(k, {}) for k in DS_KEYS}, **tables}
 
 
 @app.get("/api/segments", tags=["analytics"])
@@ -336,6 +485,10 @@ def territories(n_reps: int = Query(60), alignment: str = Query("optimised")) ->
         raise HTTPException(
             400, f"n_reps must be one of {presolved}. Alignments are pre-solved so the "
                  f"map responds instantly; solving on request would time out the demo.")
+    if alignment in ("baseline", "kmeans"):
+        # The comparison alignments are solved at the default force only. Serve
+        # that rather than an empty map when the slider sits elsewhere.
+        n_reps = params()["territory"]["n_reps_default"]
 
     return {
         "alignment": alignment,
@@ -461,22 +614,26 @@ def meta() -> dict:
         "years": p["years"],
         "therapeutic_class": p["class_definition"],
         "volume_metric": p["volume_metric"],
-        "row_counts": {k: v for k, v in m.items()
-                       if isinstance(v, dict) and "rows" in v},
+        "row_counts": {k.removeprefix("artifact:"): v for k, v in m.items()
+                       if k.startswith("artifact:") and isinstance(v, dict)},
         "suppression": {k: v for k, v in m.items() if k.startswith("suppression")},
         "open_payments_match": m.get("open_payments_match", {}),
         "potential_model": m.get("potential_model", {}),
         "sfa_crosscheck": m.get("sfa_crosscheck", {}),
         "shap_top_driver": m.get("top_driver", m.get("shap_top_driver", {})),
         "gates": {g: m.get(g) for g in ("gate_g2", "gate_g3", "gate_g4")},
-        "economic_assumptions": economics(),
+        "economic_assumptions": _assumptions_in_use(m),
+        "call_response_fit": m.get("call_response_fit", {}),
         "territory_config": p["territory"],
         "limitations": [
             "Medicare-only. Part D excludes commercial and Medicaid patients and skews "
             "65+. Less distorting for a DOAC than for most classes, since the indicated "
             "population is largely elderly, but it still under-counts younger AF patients.",
-            "Roughly two-year data lag. The latest full CMS release is not current "
-            "market conditions.",
+            "~17-month data lag. Data year 2024 was published in May 2026; it is not "
+            "current market conditions.",
+            "The promotional proxy is Open Payments food-and-beverage events that name "
+            "the brand. Not every detail involves a meal, so it under-counts calls, and "
+            "reps choose whom to visit, so any response fitted on it is an upper bound.",
             "Suppression. NPI x drug rows under 11 claims are removed from the file "
             "entirely, not blanked. Handled by reconciling against provider-level totals; "
             "sensitivity across three imputation modes is reported. Residual bias "
@@ -510,6 +667,30 @@ def meta() -> dict:
             {"name": "CDC PLACES", "url": "https://www.cdc.gov/places/"},
         ],
     }
+
+
+def _assumptions_in_use(m: dict) -> dict:
+    """economics.yaml, with the two response parameters replaced by their FITTED
+    values when the fit has run -- the Method page must show what the model
+    actually used, not the fallback constants it no longer reads."""
+    out = {k: dict(v) if isinstance(v, dict) else v for k, v in economics().items()}
+    fit = m.get("call_response_fit") or {}
+    if fit.get("fitted") and not fit.get("identifiable", True):
+        note = ("NOT IDENTIFIED: brand-named visit events show no measurable "
+                "dose-response, so this config value is an ILLUSTRATIVE assumption, not a "
+                "measurement. Sizing reports the break-even response instead.")
+        for key in ("call_response_ceiling", "call_response_half_saturation"):
+            out[key]["basis"] = note
+        return out
+    if fit.get("fitted"):
+        basis = ("FITTED from Open Payments brand-named food-and-beverage events "
+                 "(src/models/call_response.py); range is the prescriber bootstrap 95% CI.")
+        out["call_response_ceiling"].update(
+            base=fit["ceiling"], low=fit["ceiling_ci"][0], high=fit["ceiling_ci"][1], basis=basis)
+        out["call_response_half_saturation"].update(
+            base=fit["half_saturation_calls"], low=fit["half_saturation_ci"][0],
+            high=fit["half_saturation_ci"][1], basis=basis)
+    return out
 
 
 @app.get("/api/health", tags=["overview"])
