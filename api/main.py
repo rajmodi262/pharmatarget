@@ -12,10 +12,13 @@ from __future__ import annotations
 
 import csv
 import io
+import math
+import time
+import uuid
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from api import db
@@ -40,6 +43,37 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def _request_log(request: Request, call_next):
+    """One structured log line per API request, tagged with a request id.
+
+    The id goes back in X-Request-ID so a user's "it broke" can be matched to
+    the server log line, and into the body of any 500 (handler below).
+    """
+    rid = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+    request.state.request_id = rid
+    t0 = time.perf_counter()
+    response = await call_next(request)
+    ms = (time.perf_counter() - t0) * 1000
+    response.headers["X-Request-ID"] = rid
+    if request.url.path.startswith("/api/"):
+        log.info("request id=%s method=%s path=%s status=%d ms=%.1f",
+                 rid, request.method, request.url.path, response.status_code, ms)
+    return response
+
+
+@app.exception_handler(Exception)
+async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
+    """A JSON 500 with the request id, never a bare stack trace or HTML page."""
+    rid = getattr(request.state, "request_id", "-")
+    log.exception("unhandled id=%s path=%s", rid, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal error. Quote the request id when reporting it.",
+                 "request_id": rid},
+        headers={"X-Request-ID": rid})
+
 
 SORTABLE = {
     "opportunity", "class_fills", "brand_fills", "brand_share", "calls_per_month",
@@ -190,6 +224,33 @@ def list_hcps(
     if sort not in SORTABLE:
         raise HTTPException(400, f"sort must be one of {sorted(SORTABLE)}")
 
+    clause, args = _hcp_filters(state, specialty, segment, decile_min, decile_max,
+                                targets_only, q)
+    total = db.query_one(f"SELECT count(*) AS n FROM hcps WHERE {clause}", args)["n"]
+
+    direction = "DESC" if desc else "ASC"
+    rows = db.query(
+        f"""SELECT npi, last_name, first_name, city, state, specialty, specialty_group,
+                   zip3, class_fills, brand_fills, brand_share, potential_class,
+                   potential_brand, opportunity, opportunity_decile, volume_decile,
+                   decile_shift, calls_per_month, is_target, achievable_share
+            FROM hcps WHERE {clause}
+            ORDER BY {sort} {direction} NULLS LAST, npi
+            LIMIT ? OFFSET ?""",
+        args + [page_size, (page - 1) * page_size],
+    )
+    return {"total": total, "page": page, "page_size": page_size,
+            "pages": max((total + page_size - 1) // page_size, 1), "rows": rows}
+
+
+def _hcp_filters(state: str | None, specialty: str | None, segment: str | None,
+                 decile_min: int, decile_max: int, targets_only: bool,
+                 q: str | None) -> tuple[str, list]:
+    """WHERE clause shared by the list and the export.
+
+    One builder, because two drifted: the export ignored specialty and search,
+    so "Export current view" downloaded a different list from the one on screen.
+    """
     where, args = ["opportunity_decile BETWEEN ? AND ?"], [decile_min, decile_max]
     if state:
         where.append("state = ?")
@@ -207,23 +268,23 @@ def list_hcps(
     if q:
         where.append("(CAST(npi AS VARCHAR) LIKE ? OR last_name LIKE ?)")
         args += [f"{q}%", f"{q.upper()}%"]
+    return " AND ".join(where), args
 
-    clause = " AND ".join(where)
-    total = db.query_one(f"SELECT count(*) AS n FROM hcps WHERE {clause}", args)["n"]
 
-    direction = "DESC" if desc else "ASC"
-    rows = db.query(
-        f"""SELECT npi, last_name, first_name, city, state, specialty, specialty_group,
-                   zip3, class_fills, brand_fills, brand_share, potential_class,
-                   potential_brand, opportunity, opportunity_decile, volume_decile,
-                   decile_shift, calls_per_month, is_target, achievable_share
-            FROM hcps WHERE {clause}
-            ORDER BY {sort} {direction} NULLS LAST, npi
-            LIMIT ? OFFSET ?""",
-        args + [page_size, (page - 1) * page_size],
-    )
-    return {"total": total, "page": page, "page_size": page_size,
-            "pages": max((total + page_size - 1) // page_size, 1), "rows": rows}
+def _csv_response(rows: list[dict], filename: str) -> StreamingResponse:
+    def gen():
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()) if rows else ["npi"])
+        w.writeheader()
+        yield buf.getvalue()
+        for r in rows:
+            buf.seek(0), buf.truncate(0)
+            w.writerow(r)
+            yield buf.getvalue()
+
+    return StreamingResponse(
+        gen(), media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"})
 
 
 # --------------------------------------------------------------------------- #
@@ -253,6 +314,8 @@ def hcp_detail(npi: int) -> dict:
         """SELECT rank, feature, label, contribution, multiplier, value
            FROM ds_explanations WHERE npi = ? ORDER BY rank""", [npi]
     ) if db.has_view("ds_explanations") else []
+    for e in explanation:
+        e["display"] = readable_value(e["feature"], e["value"])
     forecast = db.query_one(
         "SELECT forecast_year, p_active, brand_fills_pred, brand_fills_lo, brand_fills_hi "
         "FROM ds_forecast WHERE npi = ?", [npi]) if db.has_view("ds_forecast") else None
@@ -268,37 +331,155 @@ def hcp_detail(npi: int) -> dict:
 # 4. export
 # --------------------------------------------------------------------------- #
 @app.get("/api/hcps/export/csv", tags=["targets"])
-def export_hcps(state: str | None = None, decile_min: int = 1, decile_max: int = 10,
-                targets_only: bool = False, limit: int = Query(50_000, le=200_000)):
-    """Streaming CSV of the current filter set."""
+def export_hcps(state: str | None = None, specialty: str | None = None,
+                segment: str | None = None, decile_min: int = Query(1, ge=1, le=10),
+                decile_max: int = Query(10, ge=1, le=10), targets_only: bool = False,
+                q: str | None = None, limit: int = Query(50_000, ge=1, le=200_000)):
+    """Streaming CSV of exactly the filter set on screen."""
     _require("hcps")
-    where, args = ["opportunity_decile BETWEEN ? AND ?"], [decile_min, decile_max]
-    if state:
-        where.append("state = ?")
-        args.append(state.upper())
-    if targets_only:
-        where.append("is_target")
-
+    clause, args = _hcp_filters(state, specialty, segment, decile_min, decile_max,
+                                targets_only, q)
     rows = db.query(
         f"""SELECT npi, last_name, first_name, city, state, specialty_group,
                    class_fills, brand_fills, brand_share, opportunity,
                    opportunity_decile, volume_decile, calls_per_month
-            FROM hcps WHERE {" AND ".join(where)}
+            FROM hcps WHERE {clause}
             ORDER BY opportunity DESC LIMIT ?""", args + [limit])
+    return _csv_response(rows, "pharmatarget_targets.csv")
 
-    def gen():
-        buf = io.StringIO()
-        w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()) if rows else ["npi"])
-        w.writeheader()
-        yield buf.getvalue()
-        for r in rows:
-            buf.seek(0), buf.truncate(0)
-            w.writerow(r)
-            yield buf.getvalue()
 
-    return StreamingResponse(
-        gen(), media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=pharmatarget_targets.csv"})
+# --------------------------------------------------------------------------- #
+# 4b. call list -- one rep's territory, in visit order
+# --------------------------------------------------------------------------- #
+def _calllist_rows(territory: int, n_reps: int, targets_only: bool) -> list[dict]:
+    """Prescribers whose ZIP3 is assigned to this territory, highest priority first.
+
+    `why` is the single largest driver of modelled potential from the TreeSHAP
+    explanations, phrased so a rep can read it aloud: "Specialty: Cardiology
+    (x2.36)". Prescribers outside the explained set get NULL, not a guess.
+    """
+    has_expl = db.has_view("ds_explanations")
+    has_fc = db.has_view("ds_forecast")
+    why = ("e.feature AS why_feature, e.label AS why_label, e.value AS why_value, "
+           "e.multiplier AS why_multiplier"
+           if has_expl else "NULL AS why_feature, NULL AS why_label, "
+                            "NULL AS why_value, NULL AS why_multiplier")
+    join_e = ("LEFT JOIN ds_explanations e ON e.npi = h.npi AND e.rank = 1"
+              if has_expl else "")
+    fc = ("f.brand_fills_lo AS forecast_lo, f.brand_fills_pred AS forecast_mid, "
+          "f.brand_fills_hi AS forecast_hi, f.p_active"
+          if has_fc else "NULL AS forecast_lo, NULL AS forecast_mid, "
+                         "NULL AS forecast_hi, NULL AS p_active")
+    join_f = "LEFT JOIN ds_forecast f ON f.npi = h.npi" if has_fc else ""
+    target = "AND h.is_target" if targets_only else ""
+    rows = db.query(
+        f"""SELECT row_number() OVER (ORDER BY h.is_target DESC, h.opportunity DESC,
+                                      h.npi) AS priority,
+                   h.npi, h.last_name, h.first_name, h.city, h.state, h.zip3,
+                   h.specialty_group, h.class_fills, h.brand_share, h.opportunity,
+                   h.opportunity_decile, h.calls_per_month, h.is_target,
+                   {why}, {fc}
+            FROM hcps h
+            JOIN territory_assignments t
+              ON t.unit = h.zip3 AND t.alignment = 'optimised' AND t.n_reps = ?
+            {join_e} {join_f}
+            WHERE t.territory = ? {target}
+            ORDER BY priority""",
+        [n_reps, territory])
+    out = []
+    for r in rows:
+        feat, label = r.pop("why_feature"), r.pop("why_label")
+        val, mult = r.pop("why_value"), r.pop("why_multiplier")
+        r["why"] = reason(feat, label, val, mult)
+        for k in ("class_fills", "opportunity", "forecast_lo", "forecast_mid", "forecast_hi"):
+            if r.get(k) is not None:
+                r[k] = round(r[k])
+        for k in ("brand_share", "p_active"):
+            if r.get(k) is not None:
+                r[k] = round(r[k], 3)
+        out.append(r)
+    return out
+
+
+def reason(feature: str | None, label: str | None, value: str | None,
+           multiplier: float | None) -> str | None:
+    """The top driver as one sentence a rep can say out loud."""
+    if feature is None or multiplier is None:
+        return None
+    # The volume driver is U-shaped: prescribers with almost no claims outside
+    # the class (<500) score HIGH, because they are anticoagulation clinics.
+    # "Total prescribing volume: 55 (x3.6)" reads as a bug; say what it means.
+    if feature == "log_non_class_clms" and value is not None and multiplier > 1:
+        n = math.expm1(float(value))
+        if n < 500:
+            return (f"Anticoagulant-focused practice: only {n:,.0f} claims for other "
+                    f"drugs (x{multiplier:.2f} potential)")
+    return f"{label}: {readable_value(feature, value)} (x{multiplier:.2f} potential)"
+
+
+def readable_value(feature: str | None, value: str | None) -> str:
+    """A model input as a person would say it.
+
+    Explanations store the model's own inputs, and several are log1p counts:
+    "Total prescribing volume: 9.94" means 20,700 claims, and a rep reading the
+    first would rightly ignore it.
+    """
+    if feature is None or value is None:
+        return "--"
+    try:
+        v = float(value)
+    except ValueError:
+        return value                        # categorical: "Cardiology"
+    if feature.startswith("log_"):
+        return f"{math.expm1(v):,.0f}"
+    if feature.startswith("pct_"):
+        return f"{v:.0%}"
+    return f"{v:.2f}"
+
+
+def _check_calllist(n_reps: int) -> None:
+    _require("territory_assignments")
+    presolved = params()["territory"]["n_reps_presolve"]
+    if n_reps not in presolved:
+        raise HTTPException(400, f"n_reps must be one of {presolved}")
+
+
+@app.get("/api/calllist", tags=["territories"])
+def calllist(territory: int | None = Query(None, ge=0), n_reps: int = Query(60),
+             targets_only: bool = True) -> dict:
+    """A rep's call list: every territory to choose from, and the chosen one's
+    prescribers in priority order with calls/month, a one-line reason and the
+    2025 forecast range. Without `territory`, returns only the options."""
+    _check_calllist(n_reps)
+    options = db.query(
+        """SELECT territory, sum(n_hcps) AS n_hcps, sum(n_targets) AS n_targets,
+                  sum(workload) AS workload, sum(opportunity) AS opportunity,
+                  string_agg(DISTINCT state, ', ' ORDER BY state) AS states
+           FROM territory_assignments
+           WHERE alignment = 'optimised' AND n_reps = ?
+           GROUP BY territory ORDER BY territory""", [n_reps])
+    if territory is None:
+        return {"n_reps": n_reps, "options": options, "territory": None, "rows": []}
+    head = next((o for o in options if o["territory"] == territory), None)
+    if head is None:
+        raise HTTPException(404, f"territory {territory} not found at {n_reps} reps")
+    rows = _calllist_rows(territory, n_reps, targets_only)
+    return {"n_reps": n_reps, "options": options, "territory": head,
+            "targets_only": targets_only, "rows": rows,
+            # The deploy bundle serves the top 50k prescribers; say so where it
+            # changes what a rep sees, rather than only on the Method page.
+            "served_hcps": len(rows)}
+
+
+@app.get("/api/calllist/csv", tags=["territories"])
+def calllist_csv(territory: int = Query(..., ge=0), n_reps: int = Query(60),
+                 targets_only: bool = True):
+    """The same call list as a CSV a rep can open in Excel or load into a CRM."""
+    _check_calllist(n_reps)
+    rows = _calllist_rows(territory, n_reps, targets_only)
+    if not rows:
+        raise HTTPException(404, f"territory {territory} has no prescribers at {n_reps} reps")
+    return _csv_response(rows, f"pharmatarget_territory_{territory}_calllist.csv")
 
 
 # --------------------------------------------------------------------------- #
@@ -695,7 +876,22 @@ def _assumptions_in_use(m: dict) -> dict:
 
 @app.get("/api/health", tags=["overview"])
 def health() -> dict:
-    return {"status": "ok", "data_mode": db.data_mode()}
+    """Liveness plus enough state to tell a healthy deploy from a hollow one.
+
+    `degraded` means the process is up but a core view is missing, so the
+    routes that need it return 503. The platform health check still passes
+    (status 200) -- restarting would not bring the missing file back.
+    """
+    core = ("hcps", "territory_summary", "territory_assignments", "pnl")
+    missing = [v for v in core if not db.has_view(v)]
+    m = manifest()
+    return {
+        "status": "degraded" if missing else "ok",
+        "data_mode": db.data_mode(),
+        "version": app.version,
+        "missing_core_views": missing,
+        "pipeline_run": m.get("pipeline_run", {}),
+    }
 
 
 # --------------------------------------------------------------------------- #
