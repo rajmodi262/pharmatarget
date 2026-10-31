@@ -318,21 +318,26 @@ typed in.
 ## Run it
 
 ```bash
-pip install -r requirements.txt && python -m src.pipeline --synthetic --sample && python -m uvicorn api.main:app
+pip install -r requirements.lock && python -m src.pipeline --synthetic --sample && python -m uvicorn api.main:app
 ```
 
-About two minutes, no downloads, no API keys — then open <http://localhost:8000>.
+About three minutes from a fresh clone, no downloads, no API keys — then open
+<http://localhost:8000>. (`make install-lock && make demo` does the same.) A
+fresh clone is tested exactly this way: all twelve stages including the
+data-science layer, the reports, then every API route.
 
 For real CMS data, put the source files in `dataset/` and run the resumable
-pipeline on Windows:
+runner on any OS:
 
-```powershell
-.\run_all.ps1
+```bash
+python -m src.run            # only the stale stages; --list shows which those are
 ```
 
-Each stage is skipped when its artifact is newer than the module that writes
-it, so an interrupted run resumes. `src/pipeline.py` (used by CI) runs the
-same stages. Read the findings at any point with `python -m src.utils.summary`.
+A stage is skipped when its artifact is newer than every source it depends
+on, so an interrupted run resumes and a fix re-runs exactly what it touches.
+`run_all.ps1` is a thin Windows wrapper over it. `src/pipeline.py` (used by
+CI) runs the same stages in one process. Read the findings at any point with
+`python -m src.utils.summary`.
 
 **Deployment.** `Dockerfile` and `render.yaml` serve the slim bundle in
 `data/deploy/` (top 50,000 prescribers by opportunity plus every aggregate,
@@ -342,11 +347,13 @@ browsable list is a subset.
 
 | Command | What it does |
 |---|---|
-| `make sample` | Synthetic data + full pipeline (~2 min) |
+| `make demo` | Synthetic sample pipeline, then serve on :8000 (~3 min) |
 | `make download` | Fetch CMS sources (streamed and filtered) |
-| `.\run_all.ps1 -Serve` | Full pipeline, then serve on :8000 |
+| `make run` / `make stages` | Resumable runner on real data / list what is stale |
 | `make web-install && make web` | Frontend dev server on :5173 |
-| `make test` | 209 Python tests (plus 68 frontend tests via `npm run test`) |
+| `make test` | 232 Python tests (plus 73 frontend tests via `make web-test`) |
+| `make ci` | Everything CI checks: lint, tests, web typecheck, tests and build |
+| `make docker` | Build and run the production image (non-root, health-checked) |
 | `mlflow ui --backend-store-uri ./mlruns` | Every tracked model run: parameters, metrics, artifacts |
 
 ### The app
@@ -361,11 +368,16 @@ from the API:
 | **Model Lab** | The data science: evaluation ladder and gain curves, the regression-to-the-mean trap, conformal coverage and calibration, errors and representation, double ML with sensitivity, uplift Qini and deciles, SHAP and ablations, drift, contracts and the practice network |
 | **Decision Lab** | Four exhibits to drag, ending with the business case under uncertainty (your belief, its spread and the horizon; payoff and regret matrix; value stack). The first three: the blend frontier (weight slider, bootstrap probability of clearing the floor), a headcount explorer (call response and net-price sliders, with the 2026 Medicare price marked), and a pilot designer (endpoint, design, duration, hold-out size, CUPED) |
 | **Present (`/brief`)** | The 10-slide brief, full screen, with the interactive exhibits in place of pictures |
-| **Targets · Territories · Response · Method** | The instruments: the prescriber list, the alignment map, the promotion evidence, and the data and gates |
+| **Call List** | The page a rep works from: pick a territory and get its prescribers in visit order, with calls per month, one sentence on why (the top TreeSHAP driver, in plain units) and the 2025 forecast range. Export to CSV or print. The territory sits in the URL (`/app/calls?t=3`), so a manager can send each rep their own list |
+| **Targets · Territories · Response · Method** | The instruments: the prescriber list (its export matches the filters on screen), the alignment map, the promotion evidence, and the data and gates |
 
 Charts are hand-rolled SVG with no charting library: draw-in animations,
 tooltips, scrubbers, animated re-sorting, and full respect for
-`prefers-reduced-motion`. The browser recomputes everything exactly from
+`prefers-reduced-motion`. Every text element on every route clears WCAG AA
+contrast (checked in the browser across 2,600+ elements); the prescriber
+drawer is a proper modal (focus moves in, Tab stays inside, Escape closes,
+focus returns to the row); every page is code-split, so the app shell is 4 KB
+gzipped and a page's code loads only when it is opened. The browser recomputes everything exactly from
 pipeline anchors (marginal ROI is linear in the response and the price, and
 power is a closed form), so dragging never runs a model.
 
@@ -454,11 +466,14 @@ src/models/  opportunity · callplan · backtest · challenger · call_response
 src/ds/      shrinkage · evaluation · conformal · errors · causal · uplift · explain
              ablation · drift · contracts · network · tracking (MLflow)
 docs/        technical report, model card, data card (generated from the pipeline)
-api/         16 routes, DuckDB over parquet, a cursor per request, filtering in SQL
-web/         React 18 + TS + Vite, eight routes plus story and present modes, hand-rolled SVG charts
-tests/       209 tests — manifest isolation, leakage guards, decision rule,
-             contiguity floors, suppression identities, matching balance
-run_all.ps1  resumable, dependency-aware pipeline runner
+api/         18 routes, DuckDB over parquet, a cursor per request, filtering in SQL
+web/         React 18 + TS + Vite, nine routes plus story and present modes, hand-rolled SVG charts
+tests/       232 tests — manifest isolation, leakage guards, decision rule,
+             contiguity floors, suppression identities, matching balance,
+             API contracts against the deploy bundle, the runner's staleness logic
+src/run.py   resumable, dependency-aware runner (run_all.ps1 wraps it on Windows)
+.github/     CI: lint; tests, pipeline and reports under coverage; API smoke;
+             web typecheck/tests/build; committed-build check; Docker health check
 ```
 
 **Data sources:** [Part D Prescribers by Provider and Drug](https://data.cms.gov/provider-summary-by-type-of-service) ·
