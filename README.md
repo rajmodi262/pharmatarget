@@ -199,7 +199,7 @@ comparison in finding 2.
 |---|---|---|---|---|
 | Alphabetical by state (how it is done without analytics) | 106× | 0.62 | 20% | 235 mi |
 | Plain workload-weighted k-means (the obvious analytics) | 523× | 0.83 | 98% | 49 mi |
-| **Capacitated + contiguity repair + balance pass** | **3.6×** | **0.127** | **100%** | 70 mi |
+| **Capacitated + contiguity repair + balance pass** | **3.6×** | **0.129** | **100%** | 70 mi |
 
 k-means is the most compact map and the least usable: one rep gets 500× the
 workload of another. The capacity and balance steps buy implementability for
@@ -255,9 +255,11 @@ is written up in **[docs/TECHNICAL_REPORT.md](docs/TECHNICAL_REPORT.md)** with a
 |---|---|---|
 | Is it evaluated properly? | Ladder of 8 rules (random → volume → momentum → frontier → hybrid → three GBMs); primary metric, guardrail and k **declared before results were read**; precision@k, NDCG@k, gain curves, bootstrap CIs | Hybrid wins under the guardrail (14.9% value capture vs 14.7% volume, 3.2% random) |
 | Is the target right? | Empirical-Bayes (beta-binomial) shrinkage, precision weighting, value-aligned target | Found **regression to the mean** (corr -0.563) behind the ML share "win"; value-aligned target fixes it (2.0% → 13.3% absolute capture) |
+| Is 17% of value any good? | Hindsight ceiling and a parametric-bootstrap noise ceiling (Poisson x binomial, B = 30) | Even perfect hindsight captures only 28.5% at this budget; against it the hybrid finds **53% of the achievable value**, the best model 58%, random 11%. Count noise costs almost nothing, so the gap is behaviour change no dataset records |
 | How uncertain is it? | Two-part forecast: P(still writes the brand) + conformalised quantile regression | Hurdle AUC 0.870; 90% intervals cover 90.0% in period, 89.3% out of time |
 | Where is it wrong, and for whom? | Errors and list representation by specialty, size, region, rural | Rural fair (ratio 0.93); primary care and NP/PA long tail under-reached → non-personal channels |
 | What is causal? | Double ML with cross-fitted GBMs + Cinelli–Hazlett sensitivity | +0.65 share pts [0.43, 0.87] vs +1.60 naive; robustness value 1.1%: fragile → pilot |
+| Does the causal estimate fail where it should? | Negative-control treatment (unrelated companies' meals), randomisation inference, dose-response, pre-period outcome | 2/3: survives randomisation (p < 0.005) and rises with dose (+0.47 → +0.68 → +1.16 pts), but unrelated meals show +0.33 pts too, so the brand-specific effect is **+0.32 to +0.65 pts**. Reps call on prescribers whose share just fell (-0.70 pts), which inflates naive estimates |
 | Who is persuadable? | Doubly-robust uplift learner, value-aligned, Qini on held-out folds | Monotone decile staircase (rank corr 0.988); recommend an **uplift arm in the pilot** |
 | Why does it say that? | Exact TreeSHAP from an XGBoost replica, per prescriber (Targets drawer) | Fidelity ρ 0.973; agreement with permutation importance ρ 0.94 |
 | Which choices matter? | Seven ablations | Practice features carry the model (-4.7 pts without them); two simpler variants pre-declared for next year, not adopted on the test set |
@@ -351,7 +353,7 @@ browsable list is a subset.
 | `make download` | Fetch CMS sources (streamed and filtered) |
 | `make run` / `make stages` | Resumable runner on real data / list what is stale |
 | `make web-install && make web` | Frontend dev server on :5173 |
-| `make test` | 232 Python tests (plus 73 frontend tests via `make web-test`) |
+| `make test` | 235 Python tests (plus 73 frontend tests via `make web-test`) |
 | `make ci` | Everything CI checks: lint, tests, web typecheck, tests and build |
 | `make docker` | Build and run the production image (non-root, health-checked) |
 | `mlflow ui --backend-store-uri ./mlruns` | Every tracked model run: parameters, metrics, artifacts |
@@ -463,12 +465,13 @@ src/ingest/  streaming + DuckDB ingest, geography build, synthetic generator
 src/sql/     01 staging → 03 suppression reconciliation → 05 marts
 src/models/  opportunity · callplan · backtest · challenger · call_response
              sizing · territory · segmentation · response · robustness · decision · value
-src/ds/      shrinkage · evaluation · conformal · errors · causal · uplift · explain
+src/ds/      shrinkage · evaluation · ceiling · conformal · errors · causal · placebo
+             uplift · explain
              ablation · drift · contracts · network · tracking (MLflow)
 docs/        technical report, model card, data card (generated from the pipeline)
 api/         18 routes, DuckDB over parquet, a cursor per request, filtering in SQL
 web/         React 18 + TS + Vite, nine routes plus story and present modes, hand-rolled SVG charts
-tests/       232 tests — manifest isolation, leakage guards, decision rule,
+tests/       235 tests — manifest isolation, leakage guards, decision rule,
              contiguity floors, suppression identities, matching balance,
              API contracts against the deploy bundle, the runner's staleness logic
 src/run.py   resumable, dependency-aware runner (run_all.ps1 wraps it on Windows)

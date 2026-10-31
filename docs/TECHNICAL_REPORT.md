@@ -35,6 +35,17 @@ absolute growth); a blend weight tuned on the earlier year fails the floor out o
 
 ![](../outputs/figures/DS2_gain.png)
 
+**Against what is achievable.** Value is spread across 265,283
+prescribers, so even a list chosen with perfect hindsight captures only
+28.5% at this budget. A parametric bootstrap of next year's
+counts (class fills Poisson, brand fills binomial within them, B =
+30) puts the ceiling for a model that knew every prescriber's
+expected behaviour at 28.0%: 98%
+of hindsight, so count noise is not what limits capture -- unrecorded behaviour change is.
+Against the hindsight maximum the recommended hybrid finds 53%
+of the achievable value, the best model 58%, random
+11%.
+
 ## 3. Target design: the regression-to-the-mean trap
 A gradient-boosting model trained on raw share change "won" share capture by picking
 prescribers with a median of 35.7 class fills and captured
@@ -52,8 +63,8 @@ Two-part model: P(still writes the brand), AUC 0.870, Brier
 given that. Coverage of the 90% interval: 90.0% in period,
 89.3% out of time; worst size band
 87.1%. Mondrian (per-band) calibration:
-89.2%. Point-forecast calibration slope
-1.02.
+89.3%. Point-forecast calibration slope
+1.03.
 
 ![](../outputs/figures/DS3_coverage.png)
 
@@ -79,6 +90,23 @@ Sensitivity (Cinelli and Hazlett, 2020): robustness value 1.1%
 (to zero), 0.7% (to insignificance) -- a confounder
 1.87x as strong as the prior-year trend would
 erase it. Reading: a small, fragile association; the pilot is the causal test.
+
+**Falsification tests** (`src/ds/placebo.py`), each with its failure condition stated
+before it was run -- 2/3 passed:
+
+- Negative-control treatment (a meal from a company with no anticoagulant, holding this
+  brand's meals fixed): 0.327 pts
+  [0.126, 0.528] -- fail.
+  Read as the part of the estimate that is not specific to this brand: the brand-specific
+  effect is [0.324, 0.651] share points.
+- Randomisation inference (brand-meal flag shuffled within specialty x prior-promotion
+  strata): p = 0.0 --
+  pass.
+- Dose-response (1, 2-3, 4+ meals vs none): [0.47, 0.682, 1.161] pts --
+  monotone, pass.
+- Pre-period outcome (2023 meals vs the 2022 -> 23 change, no pre-trend control):
+  -0.698 pts [-0.938, -0.458] -- the
+  selection on trend that the main model's pre-trend control removes.
 
 ## 7. Uplift
 Doubly-robust learner (Kennedy, 2023), 4-fold cross-fitted, ranked and evaluated on value

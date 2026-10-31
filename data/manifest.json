@@ -480,12 +480,12 @@
     "imbalance_before": 105.67,
     "imbalance_after": 3.64,
     "cv_before": 0.615,
-    "cv_after": 0.1267,
+    "cv_after": 0.129,
     "contiguity_before": 0.2,
     "contiguity_after": 1.0,
     "travel_before": 234.61,
-    "travel_after": 69.96,
-    "travel_reduction_pct": 0.7018,
+    "travel_after": 69.68,
+    "travel_reduction_pct": 0.703,
     "kmeans_imbalance": 523.0,
     "kmeans_cv": 0.8263,
     "kmeans_contiguity": 0.9833,
@@ -773,7 +773,7 @@
     "gate": "G4",
     "passed": true,
     "contiguity_rate": 1.0,
-    "workload_cv": 0.1267,
+    "workload_cv": 0.129,
     "conditions": {
       "contiguous": true,
       "balanced": true
@@ -819,24 +819,24 @@
       "effect_per_year": 0.00571,
       "sd_per_year": 0.04736,
       "prior_rho": 0.06842,
-      "icc_territory": 0.01122,
+      "icc_territory": 0.01015,
       "power_holdout20_6m": 0.896,
-      "power_territory_split_6m": 0.696,
+      "power_territory_split_6m": 0.723,
       "holdout_share_needed_80pct_6m": 0.15,
       "power_holdout20_12m": 0.995,
-      "power_territory_split_12m": 0.938,
+      "power_territory_split_12m": 0.95,
       "holdout_share_needed_80pct_12m": 0.07
     },
     "fills": {
       "effect_per_year": 7.54222,
       "sd_per_year": 195.70341,
       "prior_rho": 0.35203,
-      "icc_territory": 0.00647,
+      "icc_territory": 0.0053,
       "power_holdout20_6m": 0.194,
-      "power_territory_split_6m": 0.164,
+      "power_territory_split_6m": 0.176,
       "holdout_share_needed_80pct_6m": null,
       "power_holdout20_12m": 0.342,
-      "power_territory_split_12m": 0.284,
+      "power_territory_split_12m": 0.306,
       "holdout_share_needed_80pct_12m": null
     }
   },
@@ -1459,14 +1459,14 @@
     "hurdle_brier": 0.1045,
     "active_rate_next_year": 0.8129,
     "in_period_coverage": 0.9,
-    "out_of_time_uncalibrated": 0.8827,
-    "out_of_time_conformal": 0.8926,
-    "out_of_time_mondrian": 0.8922,
-    "worst_size_band_marginal": 0.8714,
-    "worst_size_band_mondrian": 0.8772,
-    "median_width_fills": 104.3,
-    "conformal_constant_log": 0.0168,
-    "calibration_slope": 1.025,
+    "out_of_time_uncalibrated": 0.8837,
+    "out_of_time_conformal": 0.893,
+    "out_of_time_mondrian": 0.8935,
+    "worst_size_band_marginal": 0.8713,
+    "worst_size_band_mondrian": 0.8835,
+    "median_width_fills": 105.4,
+    "conformal_constant_log": 0.0163,
+    "calibration_slope": 1.027,
     "forecast_rows": 282182,
     "forecast_lower_bound_positive_share": 1.0,
     "production_variant": "marginal conformal, conditional on still writing",
@@ -1869,5 +1869,73 @@
     "rows": 10,
     "cols": 4,
     "path": "data\\processed\\ds_hurdle_calibration.parquet"
+  },
+  "artifact:ds_ceiling": {
+    "rows": 10,
+    "cols": 5,
+    "path": "data\\processed\\ds_ceiling.parquet"
+  },
+  "ds_ceiling": {
+    "k": 8878,
+    "n_prescribers": 265283,
+    "bootstrap_draws": 30,
+    "hindsight_capture": 0.2846,
+    "noise_ceiling": 0.2796,
+    "noise_ceiling_range": [
+      0.2791,
+      0.2808
+    ],
+    "best_rule": "gbm_value",
+    "best_rule_share_of_max": 0.5849,
+    "winner_under_guardrail": "hybrid",
+    "winner_share_of_max": 0.5254,
+    "random_share_of_max": 0.1116,
+    "noise_share_of_hindsight": 0.9825,
+    "reading": "count noise is negligible at this budget: the gap between the rules and hindsight is behaviour change no administrative dataset records"
+  },
+  "artifact:ds_placebo": {
+    "rows": 7,
+    "cols": 9,
+    "path": "data\\processed\\ds_placebo.parquet"
+  },
+  "ds_placebo": {
+    "main_theta_points": 0.651,
+    "negative_control_theta_points": 0.327,
+    "negative_control_ci_points": [
+      0.126,
+      0.528
+    ],
+    "negative_control_grade": "fail",
+    "negative_control_passes": false,
+    "brand_specific_points_range": [
+      0.324,
+      0.651
+    ],
+    "permutation_p_value": 0.0,
+    "permutation_passes": true,
+    "dose_theta_points": [
+      0.47,
+      0.682,
+      1.161
+    ],
+    "dose_response_monotone": true,
+    "pre_period_theta_points": -0.698,
+    "pre_period_ci_points": [
+      -0.938,
+      -0.458
+    ],
+    "reading": "the estimate survives randomisation and rises with dose, but about half of it also appears for unrelated companies' meals: read the brand-specific effect as the lower end of the range; the pilot remains the causal test",
+    "tests_passed": "2/3"
+  },
+  "artifact:zip3_units": {
+    "rows": 896,
+    "cols": 12,
+    "path": "data\\processed\\zip3_units.parquet"
+  },
+  "potential_model_backtest": {
+    "tau": 0.8,
+    "n_train": 267171,
+    "in_sample_coverage": 0.8004,
+    "n_features": 23
   }
 }

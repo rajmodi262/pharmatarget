@@ -31,8 +31,12 @@
 | 4.15 | API: one filter builder for list and export (the export ignored specialty and search); `/api/calllist` + CSV; request-id middleware and JSON 500s; health reports missing core views; readable explanation values (log1p undone; anticoagulant-clinic sentence) | tests/test_api.py, 16 tests on the deploy bundle |
 | 4.16 | Web: Call List page (`/app/calls?t=N`, CSV, print, phone cards); WCAG AA contrast on every route (text-safe terracotta `--terracotta-ink`, darker faint/pos/warn); drawer focus trap and focus return; per-route code splitting (shell 214 KB -> 11 KB); unused three.js removed | 73 web tests |
 | 4.17 | CI: Python 3.10 from the lockfile (lockfile was stale: pandas 1.5.3 pinned, 2.1.4 tested); coverage across tests + pipeline + reports; report build check; web job with committed-build check; Docker job with health check; pre-commit config; non-root container user | |
+| 4.18 | `src/ds/ceiling.py`: hindsight and noise ceilings. Hindsight captures 28.5% at k; a perfect model of expected behaviour 28.0% (98% of it), so count noise is not the limit. Hybrid finds 53% of the achievable maximum, best model 58%, random 11% | Model Lab section 01, README, technical report |
+| 4.19 | `src/ds/placebo.py`: negative-control treatment (unrelated companies' meals), randomisation inference, dose-response, pre-period outcome. 2/3: survives randomisation (p < 0.005) and rises with dose (+0.47 -> +0.68 -> +1.16); unrelated meals +0.33 pts, so the brand-specific effect is +0.32 to +0.65 pts. Grade tightened from a two-way rule to pass/partial/fail after the first run, disclosed in the module; it sits on the half-size line and can flip partial/fail between runs | Model Lab section 05 |
+| 4.20 | `config/economics.yaml`: net price and rep cost now cite sources (BMS/Pfizer WAC $594.10, Oregon PDAB 31% gross-to-net, KFF DTC $346, CMS 2026 MFP $231; Cutting Edge 2008 $175k ~= $255k in 2024 dollars); shown on the Method page | |
+| 4.21 | Real-data re-run of every stale stage with `src/run.py` (18 stages, clean). Territory CV 0.127 -> 0.129 after the geography rebuild; territory-split pilot power 70% -> 72% at 6 months. Recommendation and business case unchanged | |
 
-Tests: 232 Python, 73 web.
+Tests: 235 Python, 73 web.
 
 ---
 
