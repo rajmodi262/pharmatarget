@@ -1,0 +1,14 @@
+# LF everywhere, on every OS. The committed web/dist is checked in CI against
+# a fresh Linux build; sources checked out as CRLF on Windows produced
+# different chunk hashes, so the build on disk never matched the build in CI.
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF.
+*.ps1 text eol=crlf
+
+# Binary.
+*.png binary
+*.pdf binary
+*.parquet binary
+*.woff2 binary
+*.duckdb binary
