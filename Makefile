@@ -1,17 +1,24 @@
-.PHONY: help install sample data real api test lint clean all
+.PHONY: help install install-lock sample demo data real run stages api test coverage lint \n        web-install web web-build web-check web-test docker ci clean all
 
 PY ?= python
 
 help:
 	@echo "PharmaTarget"
 	@echo ""
-	@echo "  make install   install python dependencies"
-	@echo "  make sample    synthetic data + full pipeline, small (~2 min)"
+	@echo "  make install   install python dependencies (ranges)"
+	@echo "  make install-lock  install the exact versions CI uses"
+	@echo "  make demo      sample pipeline, then serve the app on :8000 (~3 min)"
+	@echo "  make sample    synthetic data + full pipeline, small (~3 min)"
 	@echo "  make data      synthetic data + full pipeline, full scale (~8 min)"
 	@echo "  make real      pipeline against downloaded CMS data"
+	@echo "  make run       resumable runner: only the stale stages (src/run.py)"
+	@echo "  make stages    list every stage and whether it is stale"
 	@echo "  make download  fetch CMS source files into data/raw/"
 	@echo "  make api       serve the API + dashboard on :8000"
 	@echo "  make test      run the test suite"
+	@echo "  make coverage  tests with a coverage report"
+	@echo "  make ci        everything CI checks: lint, tests, web typecheck/tests/build"
+	@echo "  make docker    build and run the production image on :8000"
 	@echo "  make lint      ruff"
 	@echo "  make all       sample + test + lint"
 	@echo ""
@@ -19,11 +26,14 @@ help:
 	@echo "  make web           Vite dev server on :5173 (proxies /api to :8000)"
 	@echo "  make web-build     build web/dist, which the API then serves"
 	@echo ""
-	@echo "Start here:  make install && make sample && make api"
+	@echo "Start here:  make install && make demo"
 	@echo "Frontend:    make web-install && make web   (needs the API running)"
 
 install:
 	$(PY) -m pip install -r requirements.txt
+
+install-lock:
+	$(PY) -m pip install -r requirements.lock
 
 sample:
 	$(PY) -m src.pipeline --synthetic --sample
@@ -34,8 +44,17 @@ data:
 download:
 	$(PY) -m src.ingest.download
 
+demo: sample api
+
 real:
 	$(PY) -m src.pipeline
+
+# Resumable runner: skips every stage whose artifact is newer than its sources.
+run:
+	$(PY) -m src.run
+
+stages:
+	$(PY) -m src.run --list
 
 sensitivity:
 	$(PY) -m src.etl.build_marts --all-modes
@@ -60,11 +79,23 @@ web-build:
 web-check:
 	cd web && npm run typecheck
 
+web-test:
+	cd web && npm test
+
+docker:
+	docker build -t pharmatarget .
+	docker run --rm -p 8000:8000 pharmatarget
+
 test:
 	$(PY) -m pytest tests/ -q
 
+coverage:
+	$(PY) -m pytest tests/ -q --cov=src --cov=api --cov-report=term-missing
+
 lint:
 	$(PY) -m ruff check src api tests
+
+ci: lint test web-check web-test web-build
 
 clean:
 	rm -rf data/interim data/processed data/manifest.json
