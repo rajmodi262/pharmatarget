@@ -7,13 +7,13 @@
  */
 
 const OPPORTUNITY_FALLBACK = [
-  "#EEF3F8", "#DCE6F1", "#C4D6EA", "#A6C2E0", "#83AAD4",
-  "#5F91C7", "#4176B4", "#2A5C9B", "#17437B", "#0A2C5C",
+  "#F5E8E3", "#EFD5CB", "#E7BBAA", "#DE9D85", "#D27E61",
+  "#C75A3A", "#A4442F", "#7E3330", "#5E2236", "#45193B",
 ];
 
 const VOLUME_FALLBACK = [
-  "#F5F5F4", "#E7E5E4", "#D6D3D1", "#BFBBB8", "#A8A29E",
-  "#8C8681", "#736D68", "#57514D", "#3D3835", "#26221F",
+  "#F3EEEC", "#E6DEDC", "#D5CACA", "#C0B3B5", "#A99A9E",
+  "#908086", "#77686E", "#5E5157", "#463B41", "#2F272C",
 ];
 
 function readRamp(prefix: string, fallback: string[]): string[] {
@@ -60,7 +60,7 @@ export function onRampText(decile: number | null | undefined): string {
 export function heatAlpha(value: number, max: number, ceiling = 0.88): string {
   if (!Number.isFinite(value) || max <= 0) return "transparent";
   const a = Math.min(value / max, 1) * ceiling;
-  return `rgba(10, 44, 92, ${a.toFixed(3)})`;
+  return `rgba(58, 31, 52, ${a.toFixed(3)})`;
 }
 
 /** Linear scale helper -- avoids pulling d3-scale into small components. */

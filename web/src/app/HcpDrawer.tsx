@@ -12,6 +12,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api, qk } from "@/lib/api";
+import type { ExplanationRow, ForecastRow } from "@/lib/types";
 import { compact, fmt, pct, personName, usd } from "@/lib/format";
 import { DecileChip } from "@/components/Primitives";
 import { ErrorState, SkeletonText } from "@/components/States";
@@ -99,6 +100,29 @@ export function HcpDrawer({ npi, onClose }: { npi: number; onClose: () => void }
               potentialBrand={hcp?.potential_brand ?? 0}
               opportunity={hcp?.opportunity ?? 0}
             />
+
+            {data.forecast && <ForecastCard f={data.forecast} />}
+
+            {data.explanation && data.explanation.length > 0 && (
+              <Section title="Why this potential: top drivers">
+                <Drivers rows={data.explanation} />
+              </Section>
+            )}
+
+            {data.uplift && (
+              <Section title="Promotion response (uplift model)">
+                <Row label="Estimated share change if promoted">
+                  <span style={{ color: data.uplift.cate >= 0 ? "var(--pos)" : "var(--neg)" }}>
+                    {data.uplift.cate >= 0 ? "+" : ""}{(data.uplift.cate * 100).toFixed(2)} pts
+                  </span>
+                </Row>
+                <Row label="Propensity to be visited">{pct(data.uplift.propensity, 0)}</Row>
+                <p className="text-micro text-ink-faint mt-2 normal-case tracking-normal">
+                  Doubly-robust uplift estimate, held-out fold. Observational: it shows where
+                  promotion is associated with movement; the pilot would test it.
+                </p>
+              </Section>
+            )}
 
             <Section title="Ranking">
               <Row label="Opportunity decile">
@@ -228,6 +252,67 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
     <div className="flex items-center justify-between border-b border-rule-soft py-1.5 text-small">
       <span className="text-ink-mute">{label}</span>
       <span className="num">{children}</span>
+    </div>
+  );
+}
+
+/* -------------------------------------------------- forecast + drivers */
+
+/** Two-part forecast: will they still write the brand, and how much if so. */
+function ForecastCard({ f }: { f: ForecastRow }) {
+  const max = Math.max(f.brand_fills_hi, 1) * 1.1;
+  const x = (v: number) => `${(v / max) * 100}%`;
+  return (
+    <div className="mb-5 rounded-xl p-4" style={{ background: "color-mix(in oklab, var(--terracotta) 8%, transparent)" }}>
+      <p className="eyebrow mb-2">{f.forecast_year} forecast · conformal 90%</p>
+      <div className="flex items-baseline justify-between">
+        <span className="num text-[24px] font-semibold">{fmt(f.brand_fills_pred)}</span>
+        <span className="text-small text-ink-mute">
+          branded fills if still writing · P(still writing) <strong className="num text-ink">{pct(f.p_active, 0)}</strong>
+        </span>
+      </div>
+      <div className="relative mt-3 h-3 rounded-full" style={{ background: "var(--rule)" }}>
+        <div className="absolute inset-y-0 rounded-full" style={{
+          left: x(f.brand_fills_lo), width: `calc(${x(f.brand_fills_hi)} - ${x(f.brand_fills_lo)})`,
+          background: "linear-gradient(90deg, var(--mauve), var(--terracotta))",
+        }} />
+        <div className="absolute -top-1 h-5 w-1 rounded" style={{ left: x(f.brand_fills_pred), background: "var(--plum)" }} />
+      </div>
+      <div className="num mt-1 flex justify-between text-micro text-ink-faint">
+        <span>{fmt(f.brand_fills_lo)}</span><span>{fmt(f.brand_fills_hi)}</span>
+      </div>
+    </div>
+  );
+}
+
+/** Exact TreeSHAP contributions from the frontier replica, as multipliers. */
+function Drivers({ rows }: { rows: ExplanationRow[] }) {
+  const max = Math.max(...rows.map((r) => Math.abs(r.contribution)), 0.01);
+  return (
+    <div className="space-y-2">
+      {rows.map((r) => {
+        const up = r.contribution >= 0;
+        return (
+          <div key={r.rank} className="grid grid-cols-[1fr_120px_56px] items-center gap-2 text-small">
+            <span className="truncate" title={`value ${r.value}`}>{r.label}</span>
+            <span className="relative h-2 rounded-full" style={{ background: "var(--rule-soft)" }}>
+              <span className="absolute inset-y-0 rounded-full" style={{
+                left: up ? "50%" : `${50 - (Math.abs(r.contribution) / max) * 50}%`,
+                width: `${(Math.abs(r.contribution) / max) * 50}%`,
+                background: up ? "var(--terracotta)" : "var(--mauve)",
+              }} />
+              <span className="absolute inset-y-[-3px] left-1/2 w-px" style={{ background: "var(--ink-faint)" }} />
+            </span>
+            <span className="num text-right font-semibold" style={{ color: up ? "var(--terracotta)" : "var(--ink-mute)" }}>
+              ×{r.multiplier.toFixed(2)}
+            </span>
+          </div>
+        );
+      })}
+      <p className="text-micro text-ink-faint normal-case tracking-normal">
+        Each bar multiplies modelled potential against the average prescriber. Exact TreeSHAP
+        from an XGBoost replica of the frontier (fidelity ρ 0.97).
+      </p>
     </div>
   );
 }

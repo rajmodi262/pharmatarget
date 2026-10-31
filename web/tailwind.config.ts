@@ -42,12 +42,20 @@ export default {
         warn: "var(--warn)",
         info: "var(--info)",
 
+        // Palette
+        plum: "var(--plum)",
+        mauve: "var(--mauve)",
+        "mauve-soft": "var(--mauve-soft)",
+        terracotta: "var(--terracotta)",
+        blush: "var(--blush)",
+
         // The live act accent
         accent: "var(--accent-core)",
         "accent-glow": "var(--accent-glow)",
       },
       fontFamily: {
         display: "var(--font-display)",
+        serif: "var(--font-serif)",
         ui: "var(--font-ui)",
         mono: "var(--font-mono)",
       },
@@ -65,7 +73,7 @@ export default {
         1: "4px", 2: "8px", 3: "12px", 4: "16px", 6: "24px",
         8: "32px", 12: "48px", 16: "64px", 24: "96px", 32: "128px", 48: "192px",
       },
-      borderRadius: { sm: "4px", DEFAULT: "6px", lg: "10px" },
+      borderRadius: { sm: "4px", DEFAULT: "8px", lg: "14px", xl: "20px", full: "9999px" },
       transitionDuration: {
         instant: "90ms", quick: "160ms", base: "260ms",
         slow: "480ms", cine: "900ms", epic: "1600ms",

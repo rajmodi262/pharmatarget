@@ -19,7 +19,13 @@ import type { TerritorySummaryRow, TerritoryUnit } from "@/lib/types";
 import { Kpi, SectionHead, SourceLine } from "@/components/Primitives";
 import { ErrorState, SkeletonChart, SkeletonKpiRow } from "@/components/States";
 
-type Alignment = "optimised" | "baseline";
+type Alignment = "optimised" | "baseline" | "kmeans";
+
+const ALIGNMENT_LABEL: Record<Alignment, string> = {
+  baseline: "Before — alphabetical",
+  kmeans: "Plain k-means",
+  optimised: "After — optimised",
+};
 
 export function Territories() {
   const [nReps, setNReps] = useState(60);
@@ -70,7 +76,7 @@ export function Territories() {
         <div>
           <span className="eyebrow mb-1 block">Alignment</span>
           <div className="flex gap-2">
-            {(["baseline", "optimised"] as Alignment[]).map((a) => (
+            {(["baseline", "kmeans", "optimised"] as Alignment[]).map((a) => (
               <button
                 key={a}
                 type="button"
@@ -83,7 +89,7 @@ export function Territories() {
                     : "border-rule hover:border-signal hover:text-signal",
                 ].join(" ")}
               >
-                {a === "baseline" ? "Before — alphabetical" : "After — optimised"}
+                {ALIGNMENT_LABEL[a]}
               </button>
             ))}
           </div>
@@ -128,7 +134,9 @@ export function Territories() {
               <h3 className="text-h3 mb-3">
                 {alignment === "baseline"
                   ? "Before — territories drawn alphabetically by state"
-                  : "After — capacity-constrained and contiguous"}
+                  : alignment === "kmeans"
+                    ? "Plain workload-weighted k-means — compact, but no capacity or contiguity"
+                    : "After — capacity-constrained and contiguous"}
               </h3>
               <TerritoryMap units={data?.units ?? []} />
               <SourceLine>
@@ -160,7 +168,14 @@ export function Territories() {
 
 /* -------------------------------------------------------------------- map */
 
-function TerritoryMap({ units }: { units: TerritoryUnit[] }) {
+function TerritoryMap({ units: all }: { units: TerritoryUnit[] }) {
+  // Contiguous US only, as in the story and the deck: Alaska, Hawaii and the
+  // territories span ~100 degrees of longitude and would squash the mainland
+  // into a sliver. They stay in the solve; only the drawing drops them.
+  const units = useMemo(
+    () => all.filter((u) => u.lat >= 24 && u.lat <= 50 && u.lon >= -125 && u.lon <= -66),
+    [all],
+  );
   const geo = useMemo(() => {
     if (units.length === 0) return null;
     const lats = units.map((u) => u.lat);
