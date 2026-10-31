@@ -18,7 +18,7 @@ import yaml
 
 from src.config import ROOT, path
 from src.ds.tracking import log_run
-from src.utils.io import get_logger, record, write_parquet
+from src.utils.io import get_logger, manifest, record, write_parquet
 
 log = get_logger(__name__)
 
@@ -29,7 +29,8 @@ class ContractError(RuntimeError):
     pass
 
 
-def check_table(con: duckdb.DuckDBPyConnection, name: str, file: Path, spec: dict) -> list[dict]:
+def check_table(con: duckdb.DuckDBPyConnection, name: str, file: Path, spec: dict,
+                volume_floor: bool = True) -> list[dict]:
     src = f"read_parquet('{file.as_posix()}')"
     out: list[dict] = []
 
@@ -41,7 +42,13 @@ def check_table(con: duckdb.DuckDBPyConnection, name: str, file: Path, spec: dic
         return out
     cols = {r[0]: r[1] for r in con.execute(f"DESCRIBE SELECT * FROM {src}").fetchall()}
     n = con.execute(f"SELECT count(*) FROM {src}").fetchone()[0]
-    add("min_rows", n >= spec.get("min_rows", 0), f"{n:,} rows (min {spec.get('min_rows', 0):,})")
+    if volume_floor:
+        add("min_rows", n >= spec.get("min_rows", 0),
+            f"{n:,} rows (min {spec.get('min_rows', 0):,})")
+    else:
+        # The floor exists to catch a truncated CMS download; a synthetic sample
+        # is small by design. Every schema, key, range and rule check still runs.
+        add("min_rows", n > 0, f"{n:,} rows (volume floor skipped: synthetic data)")
 
     key = spec.get("key") or []
     if key and all(k in cols for k in key):
@@ -75,7 +82,8 @@ def check_table(con: duckdb.DuckDBPyConnection, name: str, file: Path, spec: dic
     return out
 
 
-def validate(contracts: dict | None = None, directory: Path | None = None) -> pd.DataFrame:
+def validate(contracts: dict | None = None, directory: Path | None = None,
+             volume_floor: bool = True) -> pd.DataFrame:
     contracts = contracts or yaml.safe_load(CONTRACTS.read_text(encoding="utf-8"))
     directory = directory or path("processed")
     con = duckdb.connect()
@@ -83,14 +91,15 @@ def validate(contracts: dict | None = None, directory: Path | None = None) -> pd
         con.execute("SET memory_limit='600MB'; SET threads=2")
         rows = []
         for name, spec in contracts.items():
-            rows += check_table(con, name, directory / f"{name}.parquet", spec)
+            rows += check_table(con, name, directory / f"{name}.parquet", spec, volume_floor)
     finally:
         con.close()
     return pd.DataFrame(rows)
 
 
 def run(strict: bool = True) -> dict:
-    df = validate()
+    synthetic = manifest().get("data_mode", {}).get("mode") == "SYNTHETIC"
+    df = validate(volume_floor=not synthetic)
     write_parquet(df, path("processed") / "ds_contract_results.parquet")
     failed = df[~df["passed"]]
     res = {"checks": int(len(df)), "passed": int(df["passed"].sum()), "failed": int(len(failed)),

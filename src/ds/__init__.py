@@ -18,8 +18,4 @@ the consulting pipeline.
 Every module is runnable on its own (``python -m src.ds.<name>``) and records
 its headline in data/manifest.json under a ``ds_`` key.
 """
-import os as _os
-
-# joblib probes physical cores with wmic, which is absent on recent Windows and
-# prints a spurious traceback. Cap it explicitly.
-_os.environ.setdefault("LOKY_MAX_CPU_COUNT", "2")
+# LOKY_MAX_CPU_COUNT is set in src/__init__.py, which every import passes through.
