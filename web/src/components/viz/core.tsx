@@ -139,7 +139,7 @@ export function Slider({ label, value, min, max, step, onChange, display, marks 
     <label className="block">
       <span className="flex items-baseline justify-between">
         <span className="eyebrow">{label}</span>
-        <span className="num text-small font-semibold" style={{ color: "var(--terracotta)" }}>
+        <span className="num text-small font-semibold" style={{ color: "var(--terracotta-ink)" }}>
           {display}
         </span>
       </span>

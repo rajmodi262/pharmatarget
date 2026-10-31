@@ -79,7 +79,7 @@ export function Overview() {
             )}
             <div className="mt-7 flex flex-wrap gap-3">
               <Link to="/app/lab" className="rounded-full px-5 py-2.5 text-small font-semibold no-underline transition-transform hover:scale-[1.03]"
-                style={{ background: "var(--terracotta)", color: "#fff", boxShadow: "0 10px 30px -10px rgba(199,90,58,.8)" }}>
+                style={{ background: "var(--terracotta-ink)", color: "#fff", boxShadow: "0 10px 30px -10px rgba(199,90,58,.8)" }}>
                 Open the decision lab →
               </Link>
               <Link to="/app/case" className="rounded-full border px-5 py-2.5 text-small font-semibold no-underline transition-colors hover:bg-white/10"
@@ -161,7 +161,7 @@ export function Overview() {
             k="Belief needed to justify hiring now"
             s="calls would have to beat break-even by this much; no public evidence does" />
           <Link to="/app/lab" className="self-center whitespace-nowrap rounded-full px-5 py-2.5 text-small font-semibold no-underline"
-            style={{ background: "var(--terracotta)", color: "#fff" }}>
+            style={{ background: "var(--terracotta-ink)", color: "#fff" }}>
             Test your own belief →
           </Link>
         </Reveal>
@@ -284,7 +284,7 @@ function Decision({ n, verb, tone, title, body, kind, to, link }: {
       </div>
       <h3 className="font-display mt-4 text-[24px] font-bold leading-tight">{title}</h3>
       <p className="mt-2 text-small text-ink-mute">{body}</p>
-      <Link to={to} className="mt-4 inline-flex items-center gap-1 text-small font-semibold no-underline" style={{ color: "var(--terracotta)" }}>
+      <Link to={to} className="mt-4 inline-flex items-center gap-1 text-small font-semibold no-underline" style={{ color: "var(--terracotta-ink)" }}>
         {link} <span className="transition-transform duration-quick group-hover:translate-x-1">→</span>
       </Link>
     </Reveal>

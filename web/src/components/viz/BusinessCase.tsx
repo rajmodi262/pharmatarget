@@ -22,7 +22,7 @@ import type { BusinessCaseValue, DecisionResponse, PayoffRow } from "@/lib/types
 import { Slider, Toggle, Tooltip, TipRow, smoothPath, svgPoint, useWidth, type Tip } from "./core";
 
 const SERIES: { key: keyof Pick<StrategyValues, "hold" | "cut" | "grow" | "pilot">; label: string; color: string; w: number; dash?: string }[] = [
-  { key: "pilot", label: "Hold + pilot, then decide", color: "var(--terracotta)", w: 3.4 },
+  { key: "pilot", label: "Hold + pilot, then decide", color: "var(--terracotta-ink)", w: 3.4 },
   { key: "grow", label: "Grow now (+30 reps)", color: "var(--plum)", w: 2.2 },
   { key: "cut", label: "Cut now (−20 reps)", color: "var(--mauve-ink)", w: 2.2, dash: "6 4" },
   { key: "hold", label: "Hold, no pilot", color: "var(--ink-faint)", w: 1.5, dash: "2 4" },
@@ -238,8 +238,8 @@ export function PayoffMatrix({ bc }: { bc: BusinessCaseValue }) {
           <tbody>
             {decs.map((d, i) => (
               <tr key={d}>
-                <td className="py-1 font-semibold" style={{ color: d === robust ? "var(--terracotta)" : undefined }}>
-                  {DEC_LABEL[d]} {d === robust && <span className="ml-1 rounded-full px-2 py-0.5 text-[10px] text-white" style={{ background: "var(--terracotta)" }}>robust</span>}
+                <td className="py-1 font-semibold" style={{ color: d === robust ? "var(--terracotta-ink)" : undefined }}>
+                  {DEC_LABEL[d]} {d === robust && <span className="ml-1 rounded-full px-2 py-0.5 text-[10px] text-white" style={{ background: "var(--terracotta-ink)" }}>robust</span>}
                 </td>
                 {xs.map((x, j) => {
                   const r = get(d, x);
@@ -262,7 +262,7 @@ export function PayoffMatrix({ bc }: { bc: BusinessCaseValue }) {
                     </td>
                   );
                 })}
-                <td className="num px-2 text-right font-semibold" style={{ color: d === robust ? "var(--terracotta)" : undefined }}>
+                <td className="num px-2 text-right font-semibold" style={{ color: d === robust ? "var(--terracotta-ink)" : undefined }}>
                   {usd(worst[d])}
                 </td>
               </tr>

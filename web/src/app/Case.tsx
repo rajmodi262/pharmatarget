@@ -108,7 +108,7 @@ export function Case() {
       <header className="mb-10">
         <p className="eyebrow">The case</p>
         <h1 className="display mt-2 text-[clamp(2.4rem,5vw,4.4rem)]">
-          From question to <span style={{ color: "var(--terracotta)" }}>Monday morning</span>.
+          From question to <span style={{ color: "var(--terracotta-ink)" }}>Monday morning</span>.
         </h1>
       </header>
 
@@ -210,7 +210,7 @@ function IssueTree({ root, branches }: { root: string; branches: Branch[] }) {
         {branches.map((b) => (
           <div key={b.id} className="relative grid gap-3 md:grid-cols-[180px_1fr]">
             <div className="card flex items-center gap-3 self-start p-4">
-              <span className="display text-[30px]" style={{ color: "var(--terracotta)" }}>{b.id}</span>
+              <span className="display text-[30px]" style={{ color: "var(--terracotta-ink)" }}>{b.id}</span>
               <span className="font-display text-[16px] font-bold leading-snug">{b.q}</span>
             </div>
             <div className="space-y-2">
@@ -265,7 +265,7 @@ function Objection({ q, a, verdict, tone = "pos", i }: {
           style={{ transform: flipped ? "rotateY(180deg)" : "none" }}>
           <span className="card absolute inset-0 flex flex-col justify-between p-6 [backface-visibility:hidden]">
             <span className="font-display text-[22px] font-bold italic leading-snug">{q}</span>
-            <span className="text-small font-semibold" style={{ color: "var(--terracotta)" }}>Tap for the answer ↻</span>
+            <span className="text-small font-semibold" style={{ color: "var(--terracotta-ink)" }}>Tap for the answer ↻</span>
           </span>
           <span className="slab absolute inset-0 flex flex-col justify-between p-6 [backface-visibility:hidden] [transform:rotateY(180deg)]">
             <span className="text-small leading-relaxed" style={{ color: "var(--text)" }}>{a}</span>
@@ -319,8 +319,10 @@ function Roadmap() {
                         left: `${(p.start / weeks) * 100}%`,
                         width: inView ? `${(Math.max(p.end - p.start, 1) / weeks) * 100}%` : "0%",
                         minWidth: milestone ? 34 : undefined,
-                        background: lane === "Pilot" ? "linear-gradient(90deg, var(--terracotta), var(--terracotta-hi))"
-                          : lane === "Decide" ? "var(--pos)" : lane === "Align" ? "var(--mauve)" : "var(--plum)",
+                        // Fills carry white text, so each must clear 4.5:1 against it: the
+                        // text-safe terracotta and mauve, not the brand tints.
+                        background: lane === "Pilot" ? "linear-gradient(90deg, var(--terracotta-ink), var(--terracotta))"
+                          : lane === "Decide" ? "var(--pos)" : lane === "Align" ? "var(--mauve-ink)" : "var(--plum)",
                         transition: `width 900ms cubic-bezier(.16,1,.3,1) ${idx * 110}ms`,
                         whiteSpace: "nowrap",
                       }}>

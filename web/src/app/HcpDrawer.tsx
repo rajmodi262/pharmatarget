@@ -25,16 +25,39 @@ export function HcpDrawer({ npi, onClose }: { npi: number; onClose: () => void }
     queryFn: () => api.hcp(npi),
   });
 
-  // Escape closes; focus moves into the panel so keyboard users are not left
-  // behind the overlay.
+  // A modal dialog for keyboard users: focus moves in on open, Tab cycles
+  // inside the panel instead of wandering the page behind the overlay, Escape
+  // closes, and focus returns to the row that opened it.
+  //
+  // onClose is read through a ref: callers pass an inline arrow, and with it
+  // in the deps the effect re-ran on every parent render and yanked focus
+  // back to the panel mid-interaction.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") closeRef.current();
+      if (e.key !== "Tab" || !panelRef.current) return;
+      const items = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (items.length === 0) return;
+      const first = items[0]!, last = items[items.length - 1]!;
+      const inside = panelRef.current.contains(document.activeElement);
+      if (e.shiftKey && (document.activeElement === first || !inside)) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && (document.activeElement === last || !inside)) {
+        e.preventDefault(); first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     panelRef.current?.focus();
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      opener?.focus?.();
+    };
+  }, []);
 
   const hcp = data?.hcp;
 
@@ -294,7 +317,10 @@ function Drivers({ rows }: { rows: ExplanationRow[] }) {
         const up = r.contribution >= 0;
         return (
           <div key={r.rank} className="grid grid-cols-[1fr_120px_56px] items-center gap-2 text-small">
-            <span className="truncate" title={`value ${r.value}`}>{r.label}</span>
+            <span className="min-w-0">
+              <span className="block truncate">{r.label}</span>
+              <span className="num block truncate text-micro text-ink-mute">{r.display ?? r.value}</span>
+            </span>
             <span className="relative h-2 rounded-full" style={{ background: "var(--rule-soft)" }}>
               <span className="absolute inset-y-0 rounded-full" style={{
                 left: up ? "50%" : `${50 - (Math.abs(r.contribution) / max) * 50}%`,
@@ -303,7 +329,7 @@ function Drivers({ rows }: { rows: ExplanationRow[] }) {
               }} />
               <span className="absolute inset-y-[-3px] left-1/2 w-px" style={{ background: "var(--ink-faint)" }} />
             </span>
-            <span className="num text-right font-semibold" style={{ color: up ? "var(--terracotta)" : "var(--ink-mute)" }}>
+            <span className="num text-right font-semibold" style={{ color: up ? "var(--terracotta-ink)" : "var(--ink-mute)" }}>
               ×{r.multiplier.toFixed(2)}
             </span>
           </div>

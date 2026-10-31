@@ -40,7 +40,7 @@ export function Lab() {
       <header className="mb-10">
         <p className="eyebrow">Decision lab</p>
         <h1 className="display mt-2 text-[clamp(2.4rem,5vw,4.4rem)]">
-          Push on the answer<span style={{ color: "var(--terracotta)" }}>.</span>
+          Push on the answer<span style={{ color: "var(--terracotta-ink)" }}>.</span>
         </h1>
         <p className="serif-i mt-3 max-w-[60ch] text-[20px] leading-snug text-ink-mute">
           Three questions a partner asks in the first ten minutes. Each answer is an exhibit you

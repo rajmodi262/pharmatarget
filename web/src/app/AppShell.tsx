@@ -18,6 +18,7 @@ const NAV = [
   { to: "/app/lab", label: "Decision Lab", hint: "Drag the assumptions" },
   { to: "/app/models", label: "Model Lab", hint: "Evaluation · uncertainty · causal ML" },
   { to: "/app/targets", label: "Targets", hint: "Prescriber list" },
+  { to: "/app/calls", label: "Call List", hint: "One territory, in visit order" },
   { to: "/app/territories", label: "Territories", hint: "Alignment map" },
   { to: "/app/response", label: "Response", hint: "Promotion evidence" },
   { to: "/app/method", label: "Method", hint: "Data and gates" },
@@ -111,7 +112,7 @@ export function AppShell() {
           <Link
             to="/story"
             className="flex items-center justify-between rounded-full px-4 py-2 text-small no-underline transition-transform duration-quick hover:scale-[1.02]"
-            style={{ background: "var(--terracotta)", color: "#fff" }}
+            style={{ background: "var(--terracotta-ink)", color: "#fff" }}
           >
             Watch the story <span aria-hidden>→</span>
           </Link>
@@ -142,7 +143,7 @@ export function AppShell() {
             end={item.end}
             className="whitespace-nowrap rounded-full px-3 py-1.5 text-small no-underline"
             style={({ isActive }) => ({
-              background: isActive ? "var(--terracotta)" : "transparent",
+              background: isActive ? "var(--terracotta-ink)" : "transparent",
               color: isActive ? "#fff" : "var(--text-mute)",
             })}
           >
