@@ -142,6 +142,11 @@ export function Method() {
                     <td className="num py-1.5 text-right">{fmt(v.high, 2)}</td>
                     <td className="text-micro text-ink-faint max-w-[380px] py-1.5 pl-4 normal-case tracking-normal">
                       {v.basis}
+                      {v.sources && v.sources.length > 0 && (
+                        <span className="mt-1 block">
+                          Sources: {v.sources.join(" · ")}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -91,6 +91,8 @@ VIEWS = {
     "ds_explanations": "ds_explanations",
     "ds_forecast": "ds_forecast",
     "ds_uplift_scores": "ds_uplift_scores",
+    "ds_ceiling": "ds_ceiling",
+    "ds_placebo": "ds_placebo",
     "territory_stats": "territory_stats",
     "territory_summary": "territory_summary",
     "territory_assignments": "territory_assignments",

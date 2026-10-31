@@ -55,10 +55,11 @@ def _py(module: str, *args: str) -> list[str]:
     return [PY, "-m", module, *args]
 
 
-def _ds(name: str, artifact: str) -> Stage:
+def _ds(name: str, artifact: str, extra: list[Path] | None = None) -> Stage:
     return Stage(f"ds-{name}", _py(f"src.ds.{name}"), P / f"{artifact}.parquet",
                  [Path(f"src/ds/{name}.py"), Path("src/ds/data.py"),
-                  Path("src/ds/features.py"), P / "hcp_scored.parquet"], group="ds")
+                  Path("src/ds/features.py"), P / "hcp_scored.parquet", *(extra or [])],
+                 group="ds")
 
 
 STAGES: list[Stage] = [
@@ -111,8 +112,10 @@ STAGES: list[Stage] = [
           [Path("src/ds/contracts.py"), Path("config/contracts.yaml"),
            P / "hcp_scored.parquet", P / "hcp_call_plan.parquet"], critical=True, group="ds"),
     _ds("shrinkage", "ds_shrinkage_h2h"), _ds("evaluation", "ds_ladder"),
+    _ds("ceiling", "ds_ceiling", [P / "ds_ladder.parquet"]),
     _ds("conformal", "ds_conformal_coverage"), _ds("errors", "ds_error_segments"),
-    _ds("causal", "ds_causal"), _ds("uplift", "ds_uplift_qini"),
+    _ds("causal", "ds_causal"), _ds("placebo", "ds_placebo", [Path("src/ds/causal.py")]),
+    _ds("uplift", "ds_uplift_qini"),
     _ds("explain", "ds_explanations"), _ds("ablation", "ds_ablation"),
     _ds("drift", "ds_drift"), _ds("network", "ds_network"),
     Stage("ds-tracking", _py("src.ds.tracking"), group="ds"),
