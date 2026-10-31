@@ -25,7 +25,14 @@
 | 4.10 | Model Lab page (`/app/models`), forecast/SHAP/uplift in the Targets drawer, `/api/datascience`, docs/ technical report + model + data cards, deck appendix (28 pp) | |
 | 4.11 | Fixed: a `\v` escape had mangled `src\models\value.py` in run_all.ps1 | |
 
-Tests: 209 Python, 68 web.
+| 4.12 | Fresh-clone test: the sample pipeline failed at stage 12 because the data contracts' real-data row floors (>=1M) applied to synthetic samples. The volume floor is now skipped on SYNTHETIC data; every schema, key, range and rule check still runs | 58/58 on synthetic; fresh clone runs all 12 stages in ~3 min |
+| 4.13 | .gitignore `data/` -> `data/*`: git cannot re-include files under an ignored directory, so 20 new deploy-bundle tables were silently untracked and a fresh clone's Docker image would have lacked them | |
+| 4.14 | `src/run.py`: cross-platform resumable runner replacing the logic in run_all.ps1 (now a wrapper). Two more corrupted paths found there (`\t` in `src\ds\tracking.py` and `territory_assignments.parquet`), each silently breaking a staleness check | |
+| 4.15 | API: one filter builder for list and export (the export ignored specialty and search); `/api/calllist` + CSV; request-id middleware and JSON 500s; health reports missing core views; readable explanation values (log1p undone; anticoagulant-clinic sentence) | tests/test_api.py, 16 tests on the deploy bundle |
+| 4.16 | Web: Call List page (`/app/calls?t=N`, CSV, print, phone cards); WCAG AA contrast on every route (text-safe terracotta `--terracotta-ink`, darker faint/pos/warn); drawer focus trap and focus return; per-route code splitting (shell 214 KB -> 11 KB); unused three.js removed | 73 web tests |
+| 4.17 | CI: Python 3.10 from the lockfile (lockfile was stale: pandas 1.5.3 pinned, 2.1.4 tested); coverage across tests + pipeline + reports; report build check; web job with committed-build check; Docker job with health check; pre-commit config; non-root container user | |
+
+Tests: 232 Python, 73 web.
 
 ---
 
