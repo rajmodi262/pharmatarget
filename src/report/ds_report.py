@@ -289,6 +289,7 @@ def technical_report(m: dict) -> str:
                                 "ds_causal", "ds_uplift"))
     ex, ab, dr, nw, ct = (m.get(k, {}) for k in ("ds_explain", "ds_ablation", "ds_drift", "ds_network", "ds_contracts"))
     rec, fs = m.get("recommendation", {}), m.get("decision_frontier", {})
+    ce, pl = m.get("ds_ceiling", {}), m.get("ds_placebo", {})
     rows = "\n".join(
         f"| {RULES.get(r['rule'], r['rule'])} | {_p(r['value_capture'])} [{_p(r['value_capture_lo'])}, "
         f"{_p(r['value_capture_hi'])}] | {_p(r['abs_capture'])} | {_f(r['precision_at_k'])} | "
@@ -329,6 +330,17 @@ absolute growth); a blend weight tuned on the earlier year fails the floor out o
 {_p(fs.get('equal_weight_p_clears_floor'), 0)}).
 
 ![](../outputs/figures/DS2_gain.png)
+
+**Against what is achievable.** Value is spread across {ce.get('n_prescribers', 0):,}
+prescribers, so even a list chosen with perfect hindsight captures only
+{_p(ce.get('hindsight_capture'))} at this budget. A parametric bootstrap of next year's
+counts (class fills Poisson, brand fills binomial within them, B =
+{ce.get('bootstrap_draws', '--')}) puts the ceiling for a model that knew every prescriber's
+expected behaviour at {_p(ce.get('noise_ceiling'))}: {_p(ce.get('noise_share_of_hindsight'), 0)}
+of hindsight, so count noise is not what limits capture -- unrecorded behaviour change is.
+Against the hindsight maximum the recommended hybrid finds {_p(ce.get('winner_share_of_max'), 0)}
+of the achievable value, the best model {_p(ce.get('best_rule_share_of_max'), 0)}, random
+{_p(ce.get('random_share_of_max'), 0)}.
 
 ## 3. Target design: the regression-to-the-mean trap
 A gradient-boosting model trained on raw share change "won" share capture by picking
@@ -371,6 +383,23 @@ Sensitivity (Cinelli and Hazlett, 2020): robustness value {_p(ca.get('robustness
 (to zero), {_p(ca.get('robustness_value_alpha'))} (to insignificance) -- a confounder
 {ca.get('confounder_multiple_of_pretrend', '--')}x as strong as the prior-year trend would
 erase it. Reading: a small, fragile association; the pilot is the causal test.
+
+**Falsification tests** (`src/ds/placebo.py`), each with its failure condition stated
+before it was run -- {pl.get('tests_passed', '--')} passed:
+
+- Negative-control treatment (a meal from a company with no anticoagulant, holding this
+  brand's meals fixed): {pl.get('negative_control_theta_points', '--')} pts
+  {pl.get('negative_control_ci_points', '--')} -- {pl.get('negative_control_grade', '--')}.
+  Read as the part of the estimate that is not specific to this brand: the brand-specific
+  effect is {pl.get('brand_specific_points_range', '--')} share points.
+- Randomisation inference (brand-meal flag shuffled within specialty x prior-promotion
+  strata): p = {pl.get('permutation_p_value', '--')} --
+  {'pass' if pl.get('permutation_passes') else 'FAIL'}.
+- Dose-response (1, 2-3, 4+ meals vs none): {pl.get('dose_theta_points', '--')} pts --
+  {'monotone, pass' if pl.get('dose_response_monotone') else 'not monotone, FAIL'}.
+- Pre-period outcome (2023 meals vs the 2022 -> 23 change, no pre-trend control):
+  {pl.get('pre_period_theta_points', '--')} pts {pl.get('pre_period_ci_points', '--')} -- the
+  selection on trend that the main model's pre-trend control removes.
 
 ## 7. Uplift
 Doubly-robust learner (Kennedy, 2023), 4-fold cross-fitted, ranked and evaluated on value

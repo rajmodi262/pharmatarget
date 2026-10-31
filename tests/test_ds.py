@@ -156,3 +156,55 @@ def test_contracts_catch_violations(tmp_path):
 def test_contracts_report_missing_table(tmp_path):
     res = contracts.validate({"absent": {"min_rows": 1}}, tmp_path)
     assert not res["passed"].any()
+
+
+# --------------------------------------------------------------- ceiling
+
+def _ceiling_frame(scale: float, n: int = 3000, seed: int = 7) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    cls = rng.gamma(2.0, 50 * scale, n)
+    share = rng.beta(4, 6, n)
+    # A real, prescriber-specific change in share: the signal a model could know.
+    share_next = np.clip(share + rng.normal(0, 0.15, n), 0.01, 0.99)
+    nxt = rng.poisson(cls).astype(float)
+    return pd.DataFrame({"specialty_group": "X", "class_fills": cls,
+                         "eb_share": share, "class_obs_next": nxt,
+                         "brand_fills_next": rng.binomial(nxt.astype(int), share_next).astype(float)})
+
+
+def test_noise_ceiling_falls_as_counts_get_noisier():
+    """Measured against each population's own hindsight maximum: with large
+    counts a perfect model of expected behaviour gets almost all of it; with
+    tiny counts, Poisson noise takes a visible share."""
+    from src.ds import ceiling
+    priors = pd.DataFrame({"specialty_group": ["X"], "a": [4.0], "b": [6.0]})
+
+    def share_of_hindsight(frame: pd.DataFrame) -> float:
+        v = ceiling.value(frame, priors, frame["brand_fills_next"].to_numpy(),
+                          frame["class_obs_next"].to_numpy())
+        noise, _ = ceiling.noise_ceiling(frame, priors, k=300, b=10)
+        return noise / ceiling.capture(v, v, k=300)
+
+    big, small = share_of_hindsight(_ceiling_frame(100.0)), share_of_hindsight(_ceiling_frame(0.05))
+    assert big > 0.9 and small < big
+
+
+def test_capture_is_one_for_the_oracle_when_k_covers_every_gain():
+    from src.ds import ceiling
+    v = np.array([3.0, -1.0, 2.0, 0.0])
+    assert ceiling.capture(v, v, k=2) == pytest.approx(1.0)
+    assert ceiling.capture(-v, v, k=2) == pytest.approx(0.0)
+
+
+# --------------------------------------------------------------- placebo
+
+def test_permutation_test_flags_a_real_effect_and_not_a_null():
+    from src.ds import placebo
+    rng = np.random.default_rng(8)
+    n = 4000
+    strata = rng.integers(0, 4, n).astype(str)
+    d = (rng.random(n) < 0.3).astype(float)
+    noise = rng.normal(size=n)
+    p_real, _ = placebo.permutation_test(0.4 * d + noise, d, strata, theta=0.4, n_perm=100)
+    p_null, _ = placebo.permutation_test(noise, d, strata, theta=0.0, n_perm=100)
+    assert p_real < 0.05 and p_null > 0.5

@@ -366,7 +366,7 @@ export interface MetaResponse {
   sfa_crosscheck: Record<string, number>;
   shap_top_driver: { feature?: string; share?: number; group_shares?: Record<string, number> };
   gates: Record<string, { passed?: boolean; criterion?: string } | null>;
-  economic_assumptions: Record<string, { base: number; low: number; high: number; basis: string; unit?: string }>;
+  economic_assumptions: Record<string, { base: number; low: number; high: number; basis: string; unit?: string; sources?: string[] }>;
   territory_config: Record<string, unknown>;
   limitations: string[];
   sources: { name: string; url: string }[];
@@ -586,7 +586,12 @@ export interface DataScienceResponse {
   shrinkage_h2h: H2HRow[];
   shrinkage_funnel: FunnelRow[];
   contracts: ContractRow[];
+  ceiling?: CeilingRow[];
+  placebo?: PlaceboRow[];
 }
+
+export interface CeilingRow { rule: string; value_capture: number; kind: "ceiling" | "rule"; share_of_noise_ceiling: number; share_of_hindsight: number }
+export interface PlaceboRow { test: string; detail: string; theta: number; se: number; ci_low: number; ci_high: number; t: number | null; p_value?: number | null; n_treated?: number | null }
 
 export interface ExplanationRow {
   rank: number; feature: string; label: string; contribution: number; multiplier: number; value: string;

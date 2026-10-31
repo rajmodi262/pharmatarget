@@ -604,10 +604,13 @@ DS_TABLES = {
     "network": "SELECT * FROM ds_network",
     "shrinkage_h2h": "SELECT * FROM ds_shrinkage_h2h",
     "shrinkage_funnel": "SELECT * FROM ds_shrinkage_funnel",
+    "ceiling": "SELECT * FROM ds_ceiling ORDER BY value_capture DESC",
+    "placebo": "SELECT * FROM ds_placebo",
     "contracts": "SELECT * FROM ds_contract_results",
 }
 DS_KEYS = ("ds_shrinkage", "ds_evaluation", "ds_conformal", "ds_errors", "ds_causal",
-           "ds_uplift", "ds_explain", "ds_ablation", "ds_drift", "ds_contracts", "ds_network")
+           "ds_uplift", "ds_explain", "ds_ablation", "ds_drift", "ds_contracts", "ds_network",
+           "ds_ceiling", "ds_placebo")
 
 
 @app.get("/api/datascience", tags=["analytics"])

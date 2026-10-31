@@ -114,6 +114,7 @@ def run(synthetic: bool = False, sample: bool = False, skip_optional: bool = Fal
         from src.ds import (
             ablation,
             causal,
+            ceiling,
             conformal,
             contracts,
             drift,
@@ -121,13 +122,15 @@ def run(synthetic: bool = False, sample: bool = False, skip_optional: bool = Fal
             evaluation,
             explain,
             network,
+            placebo,
             shrinkage,
             tracking,
             uplift,
         )
         contracts.run()
-        for module in (shrinkage, evaluation, conformal, errors, causal, uplift,
-                       explain, ablation, drift):
+        # ceiling reads the ladder evaluation writes; placebo re-tests causal.
+        for module in (shrinkage, evaluation, ceiling, conformal, errors, causal, placebo,
+                       uplift, explain, ablation, drift):
             module.run()
         if network.DAC.exists():
             network.run()

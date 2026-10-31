@@ -13,7 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, qk } from "@/lib/api";
 import { fmt, pct } from "@/lib/format";
 import { CountUp, Reveal } from "@/lib/motion";
-import type { DataScienceResponse } from "@/lib/types";
+import type { CeilingRow, DataScienceResponse, PlaceboRow } from "@/lib/types";
 import { Caveat, EvidencePill, SectionHead } from "@/components/Primitives";
 import { ErrorState, SkeletonChart } from "@/components/States";
 import {
@@ -32,6 +32,7 @@ export function ModelLab() {
   const shr = s("shrinkage"), ev = s("evaluation"), cf = s("conformal"), er = s("errors");
   const ca = s("causal"), up = s("uplift"), ex = s("explain"), ab = s("ablation");
   const dr = s("drift"), ct = s("contracts"), nw = s("network");
+  const ce = s("ceiling"), pl = s("placebo");
 
   return (
     <>
@@ -56,13 +57,14 @@ export function ModelLab() {
       </header>
 
       {q.isPending || !d ? <SkeletonChart h={500} /> : <Body d={d} shr={shr} ev={ev} cf={cf} er={er} ca={ca} up={up}
-        ex={ex} ab={ab} dr={dr} nw={nw} />}
+        ex={ex} ab={ab} dr={dr} nw={nw} ce={ce} pl={pl} />}
     </>
   );
 }
 
-function Body({ d, shr, ev, cf, er, ca, up, ex, ab, dr, nw }: {
+function Body({ d, shr, ev, cf, er, ca, up, ex, ab, dr, nw, ce, pl }: {
   d: DataScienceResponse; shr: S; ev: S; cf: S; er: S; ca: S; up: S; ex: S; ab: S; dr: S; nw: S;
+  ce: S; pl: S;
 }) {
   const lists = (up.list_uplift_fills ?? {}) as Record<string, number>;
   const bases = (up.list_median_base ?? {}) as Record<string, number>;
@@ -90,6 +92,7 @@ function Body({ d, shr, ev, cf, er, ca, up, ex, ab, dr, nw }: {
           Every serious rule beats random by 3–5×; the frontier alone beats random by{" "}
           {n(ev.frontier_vs_random_value_lift).toFixed(1)}×.
         </Caveat>
+        {d.ceiling && d.ceiling.length > 0 && <CeilingPanel rows={d.ceiling} ce={ce} />}
       </Section>
 
       {/* ---- 2. the regression-to-the-mean trap ----------------------------- */}
@@ -198,6 +201,7 @@ function Body({ d, shr, ev, cf, er, ca, up, ex, ab, dr, nw }: {
             </p>
           </div>
         </div>
+        {d.placebo && d.placebo.length > 0 && <PlaceboPanel rows={d.placebo} pl={pl} />}
       </Section>
 
       {/* ---- 6. uplift ----------------------------------------------------------- */}
@@ -307,6 +311,134 @@ const LIST_LABEL: Record<string, string> = {
   volume: "Volume", opportunity: "Opportunity", hybrid: "Hybrid",
   uplift_share_points: "Uplift, share points", uplift_value: "Uplift, value",
 };
+
+/** Falsification tests: each states in advance the result that would count against it. */
+function PlaceboPanel({ rows, pl }: { rows: PlaceboRow[]; pl: S }) {
+  const TONE = {
+    pass: { bg: "rgba(62,108,75,.14)", fg: "var(--pos)" },
+    partial: { bg: "rgba(133,85,16,.14)", fg: "var(--warn)" },
+    fail: { bg: "rgba(163,38,62,.12)", fg: "var(--neg)" },
+  } as const;
+  const verdict = (g: unknown) => {
+    const grade = (typeof g === "string" ? g : g ? "pass" : "fail") as keyof typeof TONE;
+    const t = TONE[grade] ?? TONE.fail;
+    return (
+      <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+        style={{ background: t.bg, color: t.fg }}>{grade}</span>
+    );
+  };
+  const band = (pl.brand_specific_points_range ?? []) as number[];
+  const pts = (v: number) => `${v >= 0 ? "+" : ""}${(100 * v).toFixed(2)}`;
+  const ci = (r: PlaceboRow) => `[${pts(r.ci_low)}, ${pts(r.ci_high)}]`;
+  const nc = rows.find((r) => r.test === "negative-control treatment");
+  const perm = rows.find((r) => r.test === "randomisation inference");
+  const doses = rows.filter((r) => r.test === "dose-response");
+  const pre = rows.find((r) => r.test === "pre-period outcome");
+  return (
+    <div className="mt-8 border-t border-rule pt-6">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-h3">Does it fail where it should? Falsification tests</h3>
+        <span className="text-small text-ink-mute">{String(pl.tests_passed ?? "–")} passed</span>
+      </div>
+      <p className="mb-4 max-w-prose text-small text-ink-mute">
+        A fragile estimate earns trust only by surviving tests built to catch the likely ways it
+        is wrong. Each one&apos;s failure condition was written before it was run.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] text-small">
+          <thead><tr className="border-b border-rule text-left">
+            <th scope="col" className="eyebrow py-1.5">Test</th>
+            <th scope="col" className="eyebrow py-1.5">Would fail if</th>
+            <th scope="col" className="eyebrow py-1.5 text-right">Result (pts)</th>
+            <th scope="col" className="eyebrow py-1.5 text-right">Verdict</th>
+          </tr></thead>
+          <tbody>
+            {nc && (
+              <tr className="border-b border-rule-soft align-top">
+                <td className="py-2 pr-3">Negative-control treatment<span className="block text-micro text-ink-mute normal-case tracking-normal">{nc.detail}</span></td>
+                <td className="py-2 pr-3 text-ink-mute">unrelated meals &quot;move&quot; this brand by half its own effect or more</td>
+                <td className="num py-2 text-right">{pts(nc.theta)} {ci(nc)}</td>
+                <td className="py-2 text-right">{verdict(pl.negative_control_grade ?? pl.negative_control_passes)}</td>
+              </tr>
+            )}
+            {perm && (
+              <tr className="border-b border-rule-soft align-top">
+                <td className="py-2 pr-3">Randomisation inference<span className="block text-micro text-ink-mute normal-case tracking-normal">{perm.detail}</span></td>
+                <td className="py-2 pr-3 text-ink-mute">shuffled flags match the real estimate (p ≥ 0.05)</td>
+                <td className="num py-2 text-right">
+                  {/* 200 shuffles cannot resolve below 1/200 */}
+                  {n(pl.permutation_p_value) === 0 ? "p < 0.005" : `p = ${n(pl.permutation_p_value).toFixed(3)}`}
+                </td>
+                <td className="py-2 text-right">{verdict(pl.permutation_passes)}</td>
+              </tr>
+            )}
+            {doses.length > 0 && (
+              <tr className="border-b border-rule-soft align-top">
+                <td className="py-2 pr-3">Dose-response<span className="block text-micro text-ink-mute normal-case tracking-normal">{doses.map((r) => r.detail).join(" · ")}</span></td>
+                <td className="py-2 pr-3 text-ink-mute">more contact goes with less effect</td>
+                <td className="num py-2 text-right">{doses.map((r) => pts(r.theta)).join(" → ")}</td>
+                <td className="py-2 text-right">{verdict(pl.dose_response_monotone)}</td>
+              </tr>
+            )}
+            {pre && (
+              <tr className="align-top">
+                <td className="py-2 pr-3">Pre-period outcome<span className="block text-micro text-ink-mute normal-case tracking-normal">{pre.detail}</span></td>
+                <td className="py-2 pr-3 text-ink-mute">not pass/fail: measures selection on trend</td>
+                <td className="num py-2 text-right">{pts(pre.theta)} {ci(pre)}</td>
+                <td className="py-2 text-right text-micro text-ink-mute">diagnostic</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {band.length === 2 && (
+        <Caveat>
+          <strong>Reading.</strong> The estimate survives randomisation and rises with dose
+          ({doses.map((r) => pts(r.theta)).join(" → ")} pts), but an unrelated company&apos;s meal is
+          associated with {nc ? pts(nc.theta) : "–"} pts too — the &quot;rep-friendly prescriber&quot;
+          effect. Subtracting it, the part specific to this brand&apos;s visits is{" "}
+          <strong>{band[0]!.toFixed(2)} to {band[1]!.toFixed(2)} share points</strong>. The pre-period test
+          shows reps call on prescribers whose share just <em>fell</em>; those drift back up on their
+          own, which is why the naive +1.60 is inflated and the pre-trend control matters.
+        </Caveat>
+      )}
+    </div>
+  );
+}
+
+/** What any list could capture, so "17% of value" can be read as a share of the possible. */
+function CeilingPanel({ rows, ce }: { rows: CeilingRow[]; ce: S }) {
+  const hind = rows.find((r) => r.rule.startsWith("hindsight"));
+  const keep = ["hybrid", "gbm_value", "volume", "frontier", "random"];
+  const shown = [
+    ...(hind ? [{ ...hind, label: "Hindsight: knows 2024 already" }] : []),
+    ...keep.map((k) => rows.find((r) => r.rule === k))
+      .filter((r): r is CeilingRow => Boolean(r))
+      .map((r) => ({ ...r, label: ruleLabel(r.rule) })),
+  ];
+  return (
+    <div className="mt-8 grid gap-8 border-t border-rule pt-6 xl:grid-cols-[1fr_1.1fr]">
+      <div>
+        <h3 className="text-h3 mb-1">Against what is achievable at all</h3>
+        <p className="mb-4 max-w-prose text-small text-ink-mute">
+          Value is spread across {fmt(n(ce.n_prescribers))} prescribers, so even a list chosen with
+          perfect hindsight captures only {pct(n(ce.hindsight_capture), 1)} at this budget. A
+          parametric bootstrap of next year&apos;s counts puts the ceiling for a model that knew
+          every prescriber&apos;s expected behaviour at {pct(n(ce.noise_ceiling), 1)}: count noise
+          costs almost nothing, so the gap is behaviour change no dataset records.
+        </p>
+        <HBars rows={shown} value="share_of_hindsight" label="label"
+          fmtV={(v) => `${pct(v, 0)} of max`} color="var(--terracotta)" />
+      </div>
+      <div className="grid content-start gap-3 sm:grid-cols-2">
+        <Card v={pct(n(ce.winner_share_of_max), 0)} k="of the achievable value the recommended hybrid finds" />
+        <Card v={pct(n(ce.best_rule_share_of_max), 0)} k="the best model finds (fails the brand's floor)" />
+        <Card v={pct(n(ce.random_share_of_max), 0)} k="random finds — the floor any list clears" />
+        <Card v={pct(n(ce.noise_share_of_hindsight), 0)} k="of hindsight is reachable by a perfect model of expected behaviour" />
+      </div>
+    </div>
+  );
+}
 
 function Section({ n: num, title, kind, head, children }: {
   n: string; title: string; kind: "BACK-TESTED" | "ARITHMETIC" | "PROXY" | "SCENARIO"; head: string; children: ReactNode;
