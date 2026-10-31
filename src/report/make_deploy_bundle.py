@@ -59,6 +59,9 @@ PRESCRIBER_TABLES: frozenset[str] = frozenset(
         "hcp_segments",     # behavioural segment label per NPI
         "mart_payments",    # open-payments rows, one per NPI-year
         "mart_hcp_metrics", # volume/share metrics, one per NPI-year
+        "ds_explanations",  # per-prescriber SHAP drivers
+        "ds_forecast",      # per-prescriber conformal forecast
+        "ds_uplift_scores", # per-prescriber uplift estimate
     }
 )
 
