@@ -12,6 +12,10 @@ requests>=2.31
 PyYAML>=6.0
 matplotlib>=3.7
 
+# Data-science layer (src/ds)
+xgboost>=2.0
+mlflow-skinny>=2.16
+
 fastapi>=0.110
 uvicorn[standard]>=0.27
 pydantic>=2.6

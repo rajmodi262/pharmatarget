@@ -216,7 +216,8 @@ Invoke-Stage -Name "call-response" `
 Invoke-Stage -Name "sizing" `
     -Command "$Python -m src.models.sizing" `
     -Artifact "$P\sizing_tornado.parquet" `
-    -Sources @("src\models\sizing.py", "$P\hcp_call_plan.parquet", "config\economics.yaml")
+    -Sources @("src\models\sizing.py", "$P\hcp_call_plan.parquet", "config\economics.yaml",
+               "$P\call_response_curve.parquet")
 
 Invoke-Stage -Name "territory" `
     -Command "$Python -m src.models.territory" `
@@ -243,7 +244,51 @@ Invoke-Stage -Name "response" `
 Invoke-Stage -Name "robustness" `
     -Command "$Python -m src.models.robustness" `
     -Artifact "$P\robustness_bootstrap.parquet" `
-    -Sources @("src\models\robustness.py", "$P\backtest_frame.parquet")
+    -Sources @("src\models\robustness.py", "$P\backtest_frame.parquet", "$P\hcp_call_plan.parquet")
+
+# Blend-weight frontier and pilot power. Needs the challenger budget, the
+# break-even response from sizing and the optimised territories.
+Invoke-Stage -Name "decision" `
+    -Command "$Python -m src.models.decision" `
+    -Artifact "$P\decision_frontier.parquet" `
+    -Sources @("src\models\decision.py", "$P\hcp_scored.parquet",
+               "$P\challenger_results.parquet", "$P	erritory_assignments.parquet",
+               "$P\sizing_required_response.parquet")
+
+# Business case under uncertainty: payoff matrix, regret, value of the pilot.
+Invoke-Stage -Name "value" `
+    -Command "$Python -m src.models.value" `
+    -Artifact "$P\decision_value_grid.parquet" `
+    -Sources @("src\models\value.py", "config\economics.yaml",
+               "$P\hcp_call_plan.parquet", "$P\decision_frontier.parquet")
+
+# --------------------------------------------------------------------------- #
+# Data-science layer (src/ds). Contracts first: nothing below trusts a mart
+# that fails them.
+# --------------------------------------------------------------------------- #
+Invoke-Stage -Name "ds-contracts" `
+    -Command "$Python -m src.ds.contracts" `
+    -Artifact "$P\ds_contract_results.parquet" `
+    -Sources @("src\ds\contracts.py", "config\contracts.yaml", "$P\hcp_scored.parquet",
+               "$P\hcp_call_plan.parquet")
+
+foreach ($m in @(
+        @("shrinkage", "ds_shrinkage_h2h"), @("evaluation", "ds_ladder"),
+        @("conformal", "ds_conformal_coverage"), @("errors", "ds_error_segments"),
+        @("causal", "ds_causal"), @("uplift", "ds_uplift_qini"),
+        @("explain", "ds_explanations"), @("ablation", "ds_ablation"),
+        @("drift", "ds_drift"), @("network", "ds_network"))) {
+    Invoke-Stage -Name "ds-$($m[0])" `
+        -Command "$Python -m src.ds.$($m[0])" `
+        -Artifact "$P\$($m[1]).parquet" `
+        -Sources @("src\ds\$($m[0]).py", "src\ds\data.py", "src\ds\features.py",
+                   "$P\hcp_scored.parquet")
+}
+
+Invoke-Stage -Name "ds-tracking" `
+    -Command "$Python -m src.ds.tracking" `
+    -Artifact "" `
+    -Sources @("src\ds	racking.py", "data\manifest.json")
 
 # Gates G2 and G4 are evaluated by src/pipeline.py, which run_all.ps1 does not
 # call -- it runs each module directly so stages stay independently resumable.
@@ -258,6 +303,13 @@ Invoke-Stage -Name "assets" `
     -Artifact "outputs\PharmaTarget_Recommendations.pdf" `
     -Sources @("src\report\make_assets.py", "$P\territory_stats.parquet",
                "$P\challenger_results.parquet", "data\manifest.json")
+
+# The slim bundle the Docker image serves. Rebuilt whenever the manifest moves,
+# so a deployment can never show numbers the pipeline has since replaced.
+Invoke-Stage -Name "deploy-bundle" `
+    -Command "$Python -m src.report.make_deploy_bundle" `
+    -Artifact "data\deploy\manifest.json" `
+    -Sources @("src\report\make_deploy_bundle.py", "data\manifest.json")
 
 Invoke-Stage -Name "lint" `
     -Command "$Python -m ruff check src api tests" `

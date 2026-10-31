@@ -38,8 +38,11 @@ __pycache__/
 .venv/
 venv/
 
-# Outputs and dev artefacts.
-outputs/
+# Outputs and dev artefacts -- except the steering-committee PDFs the app serves.
+outputs/*
+!outputs/PharmaTarget_Executive.pdf
+!outputs/PharmaTarget_OnePager.pdf
+!outputs/PharmaTarget_Recommendations.pdf
 .github/
 .vscode/
 .idea/

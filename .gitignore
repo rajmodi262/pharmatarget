@@ -1,4 +1,6 @@
-data/
+# data/* (not data/) so the deploy bundle below can be re-included;
+# git cannot re-include a file whose parent directory is ignored.
+data/*
 *.parquet
 *.duckdb
 *.csv
@@ -6,6 +8,7 @@ data/
 # The deploy bundle (36 MB, safe to commit -- under 90 MB threshold).
 !data/deploy/
 !data/deploy/*.parquet
+!data/deploy/manifest.json
 !data/manifest.json
 
 # Python
@@ -44,3 +47,6 @@ dataset/
 .coverage
 .coverage.*
 htmlcov/
+
+# MLflow local tracking store
+mlruns/
