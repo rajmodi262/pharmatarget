@@ -12,10 +12,13 @@ from __future__ import annotations
 
 import csv
 import io
+import math
+import time
+import uuid
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from api import db
@@ -40,6 +43,37 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def _request_log(request: Request, call_next):
+    """One structured log line per API request, tagged with a request id.
+
+    The id goes back in X-Request-ID so a user's "it broke" can be matched to
+    the server log line, and into the body of any 500 (handler below).
+    """
+    rid = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+    request.state.request_id = rid
+    t0 = time.perf_counter()
+    response = await call_next(request)
+    ms = (time.perf_counter() - t0) * 1000
+    response.headers["X-Request-ID"] = rid
+    if request.url.path.startswith("/api/"):
+        log.info("request id=%s method=%s path=%s status=%d ms=%.1f",
+                 rid, request.method, request.url.path, response.status_code, ms)
+    return response
+
+
+@app.exception_handler(Exception)
+async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
+    """A JSON 500 with the request id, never a bare stack trace or HTML page."""
+    rid = getattr(request.state, "request_id", "-")
+    log.exception("unhandled id=%s path=%s", rid, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal error. Quote the request id when reporting it.",
+                 "request_id": rid},
+        headers={"X-Request-ID": rid})
+
 
 SORTABLE = {
     "opportunity", "class_fills", "brand_fills", "brand_share", "calls_per_month",
@@ -77,6 +111,12 @@ def summary() -> dict:
     terr, g3 = m.get("territory_headline", {}), m.get("gate_g3", {})
     h2h = m.get("backtest_head_to_head", {})
     plan, dis = m.get("call_plan", {}), m.get("disagreement", {})
+    psm, boot = m.get("propensity_matched", {}), m.get("bootstrap_headlines", {})
+    rules = {r.get("rule"): r for r in (m.get("challenger") or {}).get("results", [])}
+
+    def _ci(key: str) -> list | None:
+        v = boot.get(key)
+        return v if isinstance(v, list) and len(v) == 3 else None
 
     return {
         "data_mode": db.data_mode(),
@@ -105,6 +145,25 @@ def summary() -> dict:
                 "caveat": g3.get("note"),
                 "opportunity_pct_of_share_growth": h2h.get("opportunity_pct_of_share_growth"),
                 "volume_pct_of_share_growth": h2h.get("volume_pct_of_share_growth"),
+                # [low, estimate, high] from the prescriber bootstrap.
+                "share_growth_ratio_ci": _ci("share_ratio"),
+                "absolute_growth_ratio_ci": _ci("abs_ratio"),
+                "spearman_ci": _ci("spearman"),
+                # Propensity-matched comparison: the headline, five covariates.
+                "matched_growth_ratio": psm.get("growth_ratio"),
+                "matched_paired_difference": psm.get("paired_difference"),
+                "matched_ci": [psm.get("ci_low"), psm.get("ci_high")],
+                "matched_pairs": psm.get("n_pairs"),
+            },
+            # Realised 2023->2024 outcomes of each rule's 60-rep list. Not
+            # causal, but observed -- and the place the trade-off is visible.
+            "business_case": {
+                "class": "BACK-TESTED",
+                "n_budget": (m.get("challenger") or {}).get("n_budget"),
+                "rules": {k: {f: v.get(f) for f in
+                              ("abs_capture", "share_capture", "net_brand_fill_growth",
+                               "median_base_class_fills")}
+                          for k, v in rules.items()},
             },
             "h2": {
                 "class": "ARITHMETIC",
@@ -118,15 +177,25 @@ def summary() -> dict:
             },
             "h3": {
                 "class": "SCENARIO",
-                "claim": "Marginal-rep economics imply the force is under-sized.",
+                "claim": "Marginal-rep economics, priced through the fitted response "
+                         "curve: where the next rep stops paying for itself.",
                 "current_n_reps": h3.get("current_n_reps"),
                 "break_even_n_reps": h3.get("break_even_n_reps"),
-                "rep_gap": h3.get("rep_gap"),
+                "recommended_n_reps": h3.get("recommended_n_reps"),
                 "marginal_roi_at_current": h3.get("marginal_roi_at_current"),
                 "incremental_profit": h3.get("incremental_profit"),
                 "sensitivity_range": [h3.get("sensitivity_low"), h3.get("sensitivity_high")],
                 "caveat": h3.get("label"),
+                # False when the call response is not identifiable from public
+                # data: break-even/ROI above are then ILLUSTRATIVE, and the
+                # decision-relevant number is the required response.
+                "response_identified": h3.get("response_identified", True),
+                "required_ceiling_at_current": h3.get("required_ceiling_at_current"),
             },
+            "recommendation": m.get("recommendation", {}),
+            "retargeting": {k: m.get("retargeting_value", {}).get(k) for k in
+                            ("hybrid_vs_volume_contribution", "delta_contribution",
+                             "priced_at", "label")},
         },
         "disagreement": dis,
         "territory": terr,
@@ -155,20 +224,8 @@ def list_hcps(
     if sort not in SORTABLE:
         raise HTTPException(400, f"sort must be one of {sorted(SORTABLE)}")
 
-    where, args = ["opportunity_decile BETWEEN ? AND ?"], [decile_min, decile_max]
-    if state:
-        where.append("state = ?")
-        args.append(state.upper())
-    if specialty:
-        where.append("specialty_group = ?")
-        args.append(specialty)
-    if targets_only:
-        where.append("is_target")
-    if q:
-        where.append("(CAST(npi AS VARCHAR) LIKE ? OR last_name LIKE ?)")
-        args += [f"{q}%", f"{q.upper()}%"]
-
-    clause = " AND ".join(where)
+    clause, args = _hcp_filters(state, specialty, segment, decile_min, decile_max,
+                                targets_only, q)
     total = db.query_one(f"SELECT count(*) AS n FROM hcps WHERE {clause}", args)["n"]
 
     direction = "DESC" if desc else "ASC"
@@ -184,6 +241,50 @@ def list_hcps(
     )
     return {"total": total, "page": page, "page_size": page_size,
             "pages": max((total + page_size - 1) // page_size, 1), "rows": rows}
+
+
+def _hcp_filters(state: str | None, specialty: str | None, segment: str | None,
+                 decile_min: int, decile_max: int, targets_only: bool,
+                 q: str | None) -> tuple[str, list]:
+    """WHERE clause shared by the list and the export.
+
+    One builder, because two drifted: the export ignored specialty and search,
+    so "Export current view" downloaded a different list from the one on screen.
+    """
+    where, args = ["opportunity_decile BETWEEN ? AND ?"], [decile_min, decile_max]
+    if state:
+        where.append("state = ?")
+        args.append(state.upper())
+    if specialty:
+        where.append("specialty_group = ?")
+        args.append(specialty)
+    if targets_only:
+        where.append("is_target")
+    if segment and db.has_view("hcp_segments"):
+        # Accepted and documented since v1 but never applied -- a filter that
+        # silently returns the unfiltered list is worse than no filter.
+        where.append("npi IN (SELECT npi FROM hcp_segments WHERE segment = ?)")
+        args.append(segment)
+    if q:
+        where.append("(CAST(npi AS VARCHAR) LIKE ? OR last_name LIKE ?)")
+        args += [f"{q}%", f"{q.upper()}%"]
+    return " AND ".join(where), args
+
+
+def _csv_response(rows: list[dict], filename: str) -> StreamingResponse:
+    def gen():
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()) if rows else ["npi"])
+        w.writeheader()
+        yield buf.getvalue()
+        for r in rows:
+            buf.seek(0), buf.truncate(0)
+            w.writerow(r)
+            yield buf.getvalue()
+
+    return StreamingResponse(
+        gen(), media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"})
 
 
 # --------------------------------------------------------------------------- #
@@ -209,45 +310,176 @@ def hcp_detail(npi: int) -> dict:
     seg = db.query_one("SELECT segment FROM hcp_segments WHERE npi = ?", [npi]) \
         if db.has_view("hcp_segments") else None
 
+    explanation = db.query(
+        """SELECT rank, feature, label, contribution, multiplier, value
+           FROM ds_explanations WHERE npi = ? ORDER BY rank""", [npi]
+    ) if db.has_view("ds_explanations") else []
+    for e in explanation:
+        e["display"] = readable_value(e["feature"], e["value"])
+    forecast = db.query_one(
+        "SELECT forecast_year, p_active, brand_fills_pred, brand_fills_lo, brand_fills_hi "
+        "FROM ds_forecast WHERE npi = ?", [npi]) if db.has_view("ds_forecast") else None
+    uplift = db.query_one("SELECT cate, propensity FROM ds_uplift_scores WHERE npi = ?", [npi]) \
+        if db.has_view("ds_uplift_scores") else None
+
     return {"hcp": row, "trend": trend, "payments": pay,
-            "segment": (seg or {}).get("segment")}
+            "segment": (seg or {}).get("segment"),
+            "explanation": explanation, "forecast": forecast, "uplift": uplift}
 
 
 # --------------------------------------------------------------------------- #
 # 4. export
 # --------------------------------------------------------------------------- #
 @app.get("/api/hcps/export/csv", tags=["targets"])
-def export_hcps(state: str | None = None, decile_min: int = 1, decile_max: int = 10,
-                targets_only: bool = False, limit: int = Query(50_000, le=200_000)):
-    """Streaming CSV of the current filter set."""
+def export_hcps(state: str | None = None, specialty: str | None = None,
+                segment: str | None = None, decile_min: int = Query(1, ge=1, le=10),
+                decile_max: int = Query(10, ge=1, le=10), targets_only: bool = False,
+                q: str | None = None, limit: int = Query(50_000, ge=1, le=200_000)):
+    """Streaming CSV of exactly the filter set on screen."""
     _require("hcps")
-    where, args = ["opportunity_decile BETWEEN ? AND ?"], [decile_min, decile_max]
-    if state:
-        where.append("state = ?")
-        args.append(state.upper())
-    if targets_only:
-        where.append("is_target")
-
+    clause, args = _hcp_filters(state, specialty, segment, decile_min, decile_max,
+                                targets_only, q)
     rows = db.query(
         f"""SELECT npi, last_name, first_name, city, state, specialty_group,
                    class_fills, brand_fills, brand_share, opportunity,
                    opportunity_decile, volume_decile, calls_per_month
-            FROM hcps WHERE {" AND ".join(where)}
+            FROM hcps WHERE {clause}
             ORDER BY opportunity DESC LIMIT ?""", args + [limit])
+    return _csv_response(rows, "pharmatarget_targets.csv")
 
-    def gen():
-        buf = io.StringIO()
-        w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()) if rows else ["npi"])
-        w.writeheader()
-        yield buf.getvalue()
-        for r in rows:
-            buf.seek(0), buf.truncate(0)
-            w.writerow(r)
-            yield buf.getvalue()
 
-    return StreamingResponse(
-        gen(), media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=pharmatarget_targets.csv"})
+# --------------------------------------------------------------------------- #
+# 4b. call list -- one rep's territory, in visit order
+# --------------------------------------------------------------------------- #
+def _calllist_rows(territory: int, n_reps: int, targets_only: bool) -> list[dict]:
+    """Prescribers whose ZIP3 is assigned to this territory, highest priority first.
+
+    `why` is the single largest driver of modelled potential from the TreeSHAP
+    explanations, phrased so a rep can read it aloud: "Specialty: Cardiology
+    (x2.36)". Prescribers outside the explained set get NULL, not a guess.
+    """
+    has_expl = db.has_view("ds_explanations")
+    has_fc = db.has_view("ds_forecast")
+    why = ("e.feature AS why_feature, e.label AS why_label, e.value AS why_value, "
+           "e.multiplier AS why_multiplier"
+           if has_expl else "NULL AS why_feature, NULL AS why_label, "
+                            "NULL AS why_value, NULL AS why_multiplier")
+    join_e = ("LEFT JOIN ds_explanations e ON e.npi = h.npi AND e.rank = 1"
+              if has_expl else "")
+    fc = ("f.brand_fills_lo AS forecast_lo, f.brand_fills_pred AS forecast_mid, "
+          "f.brand_fills_hi AS forecast_hi, f.p_active"
+          if has_fc else "NULL AS forecast_lo, NULL AS forecast_mid, "
+                         "NULL AS forecast_hi, NULL AS p_active")
+    join_f = "LEFT JOIN ds_forecast f ON f.npi = h.npi" if has_fc else ""
+    target = "AND h.is_target" if targets_only else ""
+    rows = db.query(
+        f"""SELECT row_number() OVER (ORDER BY h.is_target DESC, h.opportunity DESC,
+                                      h.npi) AS priority,
+                   h.npi, h.last_name, h.first_name, h.city, h.state, h.zip3,
+                   h.specialty_group, h.class_fills, h.brand_share, h.opportunity,
+                   h.opportunity_decile, h.calls_per_month, h.is_target,
+                   {why}, {fc}
+            FROM hcps h
+            JOIN territory_assignments t
+              ON t.unit = h.zip3 AND t.alignment = 'optimised' AND t.n_reps = ?
+            {join_e} {join_f}
+            WHERE t.territory = ? {target}
+            ORDER BY priority""",
+        [n_reps, territory])
+    out = []
+    for r in rows:
+        feat, label = r.pop("why_feature"), r.pop("why_label")
+        val, mult = r.pop("why_value"), r.pop("why_multiplier")
+        r["why"] = reason(feat, label, val, mult)
+        for k in ("class_fills", "opportunity", "forecast_lo", "forecast_mid", "forecast_hi"):
+            if r.get(k) is not None:
+                r[k] = round(r[k])
+        for k in ("brand_share", "p_active"):
+            if r.get(k) is not None:
+                r[k] = round(r[k], 3)
+        out.append(r)
+    return out
+
+
+def reason(feature: str | None, label: str | None, value: str | None,
+           multiplier: float | None) -> str | None:
+    """The top driver as one sentence a rep can say out loud."""
+    if feature is None or multiplier is None:
+        return None
+    # The volume driver is U-shaped: prescribers with almost no claims outside
+    # the class (<500) score HIGH, because they are anticoagulation clinics.
+    # "Total prescribing volume: 55 (x3.6)" reads as a bug; say what it means.
+    if feature == "log_non_class_clms" and value is not None and multiplier > 1:
+        n = math.expm1(float(value))
+        if n < 500:
+            return (f"Anticoagulant-focused practice: only {n:,.0f} claims for other "
+                    f"drugs (x{multiplier:.2f} potential)")
+    return f"{label}: {readable_value(feature, value)} (x{multiplier:.2f} potential)"
+
+
+def readable_value(feature: str | None, value: str | None) -> str:
+    """A model input as a person would say it.
+
+    Explanations store the model's own inputs, and several are log1p counts:
+    "Total prescribing volume: 9.94" means 20,700 claims, and a rep reading the
+    first would rightly ignore it.
+    """
+    if feature is None or value is None:
+        return "--"
+    try:
+        v = float(value)
+    except ValueError:
+        return value                        # categorical: "Cardiology"
+    if feature.startswith("log_"):
+        return f"{math.expm1(v):,.0f}"
+    if feature.startswith("pct_"):
+        return f"{v:.0%}"
+    return f"{v:.2f}"
+
+
+def _check_calllist(n_reps: int) -> None:
+    _require("territory_assignments")
+    presolved = params()["territory"]["n_reps_presolve"]
+    if n_reps not in presolved:
+        raise HTTPException(400, f"n_reps must be one of {presolved}")
+
+
+@app.get("/api/calllist", tags=["territories"])
+def calllist(territory: int | None = Query(None, ge=0), n_reps: int = Query(60),
+             targets_only: bool = True) -> dict:
+    """A rep's call list: every territory to choose from, and the chosen one's
+    prescribers in priority order with calls/month, a one-line reason and the
+    2025 forecast range. Without `territory`, returns only the options."""
+    _check_calllist(n_reps)
+    options = db.query(
+        """SELECT territory, sum(n_hcps) AS n_hcps, sum(n_targets) AS n_targets,
+                  sum(workload) AS workload, sum(opportunity) AS opportunity,
+                  string_agg(DISTINCT state, ', ' ORDER BY state) AS states
+           FROM territory_assignments
+           WHERE alignment = 'optimised' AND n_reps = ?
+           GROUP BY territory ORDER BY territory""", [n_reps])
+    if territory is None:
+        return {"n_reps": n_reps, "options": options, "territory": None, "rows": []}
+    head = next((o for o in options if o["territory"] == territory), None)
+    if head is None:
+        raise HTTPException(404, f"territory {territory} not found at {n_reps} reps")
+    rows = _calllist_rows(territory, n_reps, targets_only)
+    return {"n_reps": n_reps, "options": options, "territory": head,
+            "targets_only": targets_only, "rows": rows,
+            # The deploy bundle serves the top 50k prescribers; say so where it
+            # changes what a rep sees, rather than only on the Method page.
+            "served_hcps": len(rows)}
+
+
+@app.get("/api/calllist/csv", tags=["territories"])
+def calllist_csv(territory: int = Query(..., ge=0), n_reps: int = Query(60),
+                 targets_only: bool = True):
+    """The same call list as a CSV a rep can open in Excel or load into a CRM."""
+    _check_calllist(n_reps)
+    rows = _calllist_rows(territory, n_reps, targets_only)
+    if not rows:
+        raise HTTPException(404, f"territory {territory} has no prescribers at {n_reps} reps")
+    return _csv_response(rows, f"pharmatarget_territory_{territory}_calllist.csv")
 
 
 # --------------------------------------------------------------------------- #
@@ -289,8 +521,109 @@ def sizing() -> dict:
         "tornado": db.query("SELECT * FROM tornado ORDER BY swing DESC"),
         "pnl": db.query("SELECT * FROM pnl") if db.has_view("pnl") else [],
         "headline": manifest().get("headline_h3", {}),
-        "assumptions": {k: v for k, v in economics().items() if k != "sizing"},
+        "retargeting": manifest().get("retargeting_value", {}),
+        "assumptions": {k: v for k, v in _assumptions_in_use(manifest()).items()
+                        if k != "sizing"},
     }
+
+
+# Publicly reported 2026 Medicare negotiated price (Inflation Reduction Act,
+# CMS, August 2024) for the focus brand's 30-day supply. Used ONLY as a named
+# scenario on the decision lab's revenue slider, never in a base-case figure.
+IRA_2026_PRICE_PER_FILL = 231.0
+
+
+@app.get("/api/decision", tags=["analytics"])
+def decision() -> dict:
+    """Inputs for the decision lab: blend frontier, headcount explorer, pilot sizing.
+
+    Everything the page computes interactively is linear in its sliders --
+    marginal ROI and retargeting value both scale with the response ceiling and
+    with revenue per fill -- so the browser can recompute exactly from these
+    pre-computed anchors instead of re-running a model per drag.
+    """
+    _require("decision_frontier")
+    m = manifest()
+    econ_ = economics()
+    return {
+        "frontier": db.query("SELECT * FROM decision_frontier ORDER BY period, weight"),
+        "frontier_summary": m.get("decision_frontier", {}),
+        "recommendation": m.get("recommendation", {}),
+        "pilot": m.get("pilot_design", {}),
+        "required_response": db.query(
+            "SELECT * FROM required_response ORDER BY n_reps")
+        if db.has_view("required_response") else [],
+        "retargeting": m.get("retargeting_value", {}),
+        "headline": m.get("headline_h3", {}),
+        "business_case": m.get("business_case_value", {}),
+        "value_grid": db.query("SELECT * FROM value_grid ORDER BY n_reps")
+        if db.has_view("value_grid") else [],
+        "economics": {
+            "net_revenue_per_30day_fill": econ_["net_revenue_per_30day_fill"],
+            "contribution_margin": econ_["contribution_margin"],
+            "rep_cost_annual": econ_["rep_cost_annual"],
+            "ira_2026_price_per_fill": IRA_2026_PRICE_PER_FILL,
+        },
+    }
+
+
+# The steering-committee pack, downloadable from the app. A fixed allow-list:
+# the route never takes a path from the request.
+DOWNLOADS = {
+    "executive": ("PharmaTarget_Executive.pdf", "10-slide executive deck"),
+    "onepager": ("PharmaTarget_OnePager.pdf", "One-page decision memo"),
+    "full": ("PharmaTarget_Recommendations.pdf", "Full analysis deck (appendix)"),
+}
+
+
+@app.get("/api/download/{name}", tags=["overview"])
+def download(name: str):
+    if name not in DOWNLOADS:
+        raise HTTPException(404, f"unknown document '{name}'")
+    fname, _ = DOWNLOADS[name]
+    f = ROOT / "outputs" / fname
+    if not f.exists():
+        raise HTTPException(503, f"{fname} not built -- run python -m src.report.make_assets")
+    return FileResponse(f, media_type="application/pdf", filename=fname)
+
+
+DS_TABLES = {
+    "ladder": "SELECT * FROM ds_ladder ORDER BY value_capture DESC",
+    "gain_curves": "SELECT * FROM ds_gain_curves ORDER BY rule, fraction_targeted",
+    "coverage": "SELECT * FROM ds_conformal_coverage",
+    "calibration": "SELECT * FROM ds_calibration ORDER BY bin",
+    "hurdle_calibration": "SELECT * FROM ds_hurdle_calibration ORDER BY bin",
+    "errors": "SELECT * FROM ds_error_segments",
+    "representation": "SELECT * FROM ds_representation",
+    "causal": "SELECT * FROM ds_causal",
+    "qini": "SELECT * FROM ds_uplift_qini ORDER BY fraction_targeted",
+    "uplift_deciles": "SELECT * FROM ds_uplift_value_deciles ORDER BY decile",
+    "shap_global": "SELECT * FROM ds_shap_global ORDER BY mean_abs_shap DESC",
+    "ablation": "SELECT * FROM ds_ablation",
+    "drift": "SELECT * FROM ds_drift",
+    "network": "SELECT * FROM ds_network",
+    "shrinkage_h2h": "SELECT * FROM ds_shrinkage_h2h",
+    "shrinkage_funnel": "SELECT * FROM ds_shrinkage_funnel",
+    "ceiling": "SELECT * FROM ds_ceiling ORDER BY value_capture DESC",
+    "placebo": "SELECT * FROM ds_placebo",
+    "contracts": "SELECT * FROM ds_contract_results",
+}
+DS_KEYS = ("ds_shrinkage", "ds_evaluation", "ds_conformal", "ds_errors", "ds_causal",
+           "ds_uplift", "ds_explain", "ds_ablation", "ds_drift", "ds_contracts", "ds_network",
+           "ds_ceiling", "ds_placebo")
+
+
+@app.get("/api/datascience", tags=["analytics"])
+def datascience() -> dict:
+    """Everything the Model Lab shows: evaluation, uncertainty, causal ML,
+    uplift, explanations, ablations, drift, contracts and the practice network."""
+    _require("ds_ladder")
+    m = manifest()
+    tables = {}
+    for key, sql in DS_TABLES.items():
+        view = sql.split(" FROM ")[1].split()[0]
+        tables[key] = db.query(sql) if db.has_view(view) else []
+    return {"summary": {k.removeprefix("ds_"): m.get(k, {}) for k in DS_KEYS}, **tables}
 
 
 @app.get("/api/segments", tags=["analytics"])
@@ -336,6 +669,10 @@ def territories(n_reps: int = Query(60), alignment: str = Query("optimised")) ->
         raise HTTPException(
             400, f"n_reps must be one of {presolved}. Alignments are pre-solved so the "
                  f"map responds instantly; solving on request would time out the demo.")
+    if alignment in ("baseline", "kmeans"):
+        # The comparison alignments are solved at the default force only. Serve
+        # that rather than an empty map when the slider sits elsewhere.
+        n_reps = params()["territory"]["n_reps_default"]
 
     return {
         "alignment": alignment,
@@ -461,22 +798,26 @@ def meta() -> dict:
         "years": p["years"],
         "therapeutic_class": p["class_definition"],
         "volume_metric": p["volume_metric"],
-        "row_counts": {k: v for k, v in m.items()
-                       if isinstance(v, dict) and "rows" in v},
+        "row_counts": {k.removeprefix("artifact:"): v for k, v in m.items()
+                       if k.startswith("artifact:") and isinstance(v, dict)},
         "suppression": {k: v for k, v in m.items() if k.startswith("suppression")},
         "open_payments_match": m.get("open_payments_match", {}),
         "potential_model": m.get("potential_model", {}),
         "sfa_crosscheck": m.get("sfa_crosscheck", {}),
         "shap_top_driver": m.get("top_driver", m.get("shap_top_driver", {})),
         "gates": {g: m.get(g) for g in ("gate_g2", "gate_g3", "gate_g4")},
-        "economic_assumptions": economics(),
+        "economic_assumptions": _assumptions_in_use(m),
+        "call_response_fit": m.get("call_response_fit", {}),
         "territory_config": p["territory"],
         "limitations": [
             "Medicare-only. Part D excludes commercial and Medicaid patients and skews "
             "65+. Less distorting for a DOAC than for most classes, since the indicated "
             "population is largely elderly, but it still under-counts younger AF patients.",
-            "Roughly two-year data lag. The latest full CMS release is not current "
-            "market conditions.",
+            "~17-month data lag. Data year 2024 was published in May 2026; it is not "
+            "current market conditions.",
+            "The promotional proxy is Open Payments food-and-beverage events that name "
+            "the brand. Not every detail involves a meal, so it under-counts calls, and "
+            "reps choose whom to visit, so any response fitted on it is an upper bound.",
             "Suppression. NPI x drug rows under 11 claims are removed from the file "
             "entirely, not blanked. Handled by reconciling against provider-level totals; "
             "sensitivity across three imputation modes is reported. Residual bias "
@@ -512,9 +853,48 @@ def meta() -> dict:
     }
 
 
+def _assumptions_in_use(m: dict) -> dict:
+    """economics.yaml, with the two response parameters replaced by their FITTED
+    values when the fit has run -- the Method page must show what the model
+    actually used, not the fallback constants it no longer reads."""
+    out = {k: dict(v) if isinstance(v, dict) else v for k, v in economics().items()}
+    fit = m.get("call_response_fit") or {}
+    if fit.get("fitted") and not fit.get("identifiable", True):
+        note = ("NOT IDENTIFIED: brand-named visit events show no measurable "
+                "dose-response, so this config value is an ILLUSTRATIVE assumption, not a "
+                "measurement. Sizing reports the break-even response instead.")
+        for key in ("call_response_ceiling", "call_response_half_saturation"):
+            out[key]["basis"] = note
+        return out
+    if fit.get("fitted"):
+        basis = ("FITTED from Open Payments brand-named food-and-beverage events "
+                 "(src/models/call_response.py); range is the prescriber bootstrap 95% CI.")
+        out["call_response_ceiling"].update(
+            base=fit["ceiling"], low=fit["ceiling_ci"][0], high=fit["ceiling_ci"][1], basis=basis)
+        out["call_response_half_saturation"].update(
+            base=fit["half_saturation_calls"], low=fit["half_saturation_ci"][0],
+            high=fit["half_saturation_ci"][1], basis=basis)
+    return out
+
+
 @app.get("/api/health", tags=["overview"])
 def health() -> dict:
-    return {"status": "ok", "data_mode": db.data_mode()}
+    """Liveness plus enough state to tell a healthy deploy from a hollow one.
+
+    `degraded` means the process is up but a core view is missing, so the
+    routes that need it return 503. The platform health check still passes
+    (status 200) -- restarting would not bring the missing file back.
+    """
+    core = ("hcps", "territory_summary", "territory_assignments", "pnl")
+    missing = [v for v in core if not db.has_view(v)]
+    m = manifest()
+    return {
+        "status": "degraded" if missing else "ok",
+        "data_mode": db.data_mode(),
+        "version": app.version,
+        "missing_core_views": missing,
+        "pipeline_run": m.get("pipeline_run", {}),
+    }
 
 
 # --------------------------------------------------------------------------- #

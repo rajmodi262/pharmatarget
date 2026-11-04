@@ -5,39 +5,121 @@ on:
     branches: [main, master]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  python:
+    name: Python - lint, tests, pipeline, API
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
+      # 3.10 is what the lockfile is verified against.
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.10"
           cache: pip
+          cache-dependency-path: requirements.lock
 
-      - name: Install
-        run: pip install -r requirements.txt
+      - name: Install (exact, from the lockfile)
+        run: pip install -r requirements.lock
 
       - name: Lint
         run: python -m ruff check src api tests
 
-      - name: Test
-        run: python -m pytest tests/ -q
+      # Unit and API tests. The API tests run against the committed deploy
+      # bundle -- the exact data the hosted app serves.
+      - name: Tests
+        run: python -m coverage run -m pytest tests/ -q
 
-      # The pipeline runs end to end on every push. A unit test can pass while
-      # the stages no longer compose; this catches that.
-      - name: Pipeline smoke test
-        run: python -m src.pipeline --synthetic --sample
+      # The pipeline runs end to end on every push, all twelve stages including
+      # the data-science layer. A unit test can pass while the stages no longer
+      # compose; this catches that. It runs under coverage too, so the report
+      # counts the orchestration and report code the pipeline exercises.
+      - name: Pipeline smoke test (synthetic sample, all stages)
+        run: python -m coverage run -m src.pipeline --synthetic --sample
+
+      # The deck, executive pack and data-science docs are generated, so they
+      # can break like code. Build them and check every PDF landed.
+      - name: Reports build (deck, executive pack, docs, summary)
+        run: |
+          python -m coverage run -m src.report.make_assets
+          python -m coverage run -m src.utils.summary
+          for f in PharmaTarget_Recommendations PharmaTarget_Executive PharmaTarget_OnePager; do
+            test -s "outputs/$f.pdf" || { echo "::error::outputs/$f.pdf missing"; exit 1; }
+          done
+          test -s docs/TECHNICAL_REPORT.md
+
+      - name: Coverage (tests + pipeline + reports)
+        run: |
+          python -m coverage combine
+          python -m coverage report --sort=cover | tail -25
+          python -m coverage xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
 
       - name: API smoke test
         run: |
           python -m uvicorn api.main:app --port 8000 &
-          sleep 8
-          for ep in health summary hcps callplan sizing backtest segments response meta; do
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/api/health >/dev/null && break; sleep 1; done
+          for ep in health summary hcps callplan sizing backtest segments response meta decision datascience calllist \
+                    "territories?n_reps=60" "calllist?territory=0" "calllist/csv?territory=0"; do
             code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8000/api/$ep")
             echo "/api/$ep -> $code"
             [ "$code" = "200" ] || exit 1
           done
-          curl -s -o /dev/null -w 'territories -> %{http_code}\n' \
-            "http://127.0.0.1:8000/api/territories?n_reps=60"
+
+  web:
+    name: Web - typecheck, tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci --no-fund --no-audit
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      # web/dist is committed so the Docker image needs no Node. Fail if the
+      # committed build is not what the source produces -- otherwise the
+      # deployed app silently lags the code. index.html names every hashed
+      # chunk, so it changes whenever any of them does.
+      - name: Committed build is current
+        run: |
+          git diff --stat --exit-code -- dist/index.html || {
+            echo "::error::web/dist is stale. Run 'npm run build' in web/ and commit web/dist.";
+            exit 1; }
+
+  docker:
+    name: Docker image builds and serves
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [python, web]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t pharmatarget:ci .
+      - name: Container answers on /api/health and serves the app
+        run: |
+          docker run -d -p 8000:8000 --name pt pharmatarget:ci
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:8000/api/health >/dev/null && break; sleep 2; done
+          curl -sf http://127.0.0.1:8000/api/health | tee /dev/stderr | grep -q '"status":"ok"'
+          curl -sf "http://127.0.0.1:8000/api/calllist?territory=0" >/dev/null
+          curl -sf http://127.0.0.1:8000/app/calls | grep -q 'id="root"'
+          docker logs pt | tail -20

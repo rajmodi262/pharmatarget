@@ -90,7 +90,10 @@ PROVIDER_COLS = ["Prscrbr_NPI", "Prscrbr_Last_Org_Name", "Prscrbr_First_Name",
                  "GE65_Tot_Benes",
                  "Bene_Avg_Risk_Scre"]
 
-UA = {"User-Agent": "PharmaTarget/2.0 (portfolio analytics; CMS public data)"}
+OP_PRODUCT_COLS = [f"Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_{i}"
+                   for i in range(1, 6)]
+
+UA = {"User-Agent":"PharmaTarget/2.0 (portfolio analytics; CMS public data)"}
 
 
 # --------------------------------------------------------------------------- #
@@ -399,6 +402,45 @@ def fetch_provider_year(url: str, year: int, force: bool = False) -> dict:
     return {"rows": n, "source": url}
 
 
+def _filter_op_duckdb(src: Path, dst: Path, wanted: set[str],
+                      keep_cols: list[str]) -> tuple[int, dict[str, int]]:
+    """Filter a local Open Payments bulk CSV to our manufacturers with DuckDB.
+
+    Same contract as the streaming path: same columns, same header, same
+    manufacturer filter (exact match after TRIM). Every field is read as text
+    and written back unchanged; typing happens in SQL 05, not here.
+    """
+    import duckdb
+
+    t0 = time.time()
+    con = duckdb.connect()
+    # Bounded memory: stream straight from the source CSV to the output file.
+    # Materialising the filtered rows first ran a 16 GB machine out of memory.
+    con.execute("SET preserve_insertion_order = false")
+    con.execute("SET memory_limit = '1GB'")
+    con.execute("SET threads = 2")
+    names = ", ".join("'" + n.replace("'", "''") + "'" for n in sorted(wanted))
+    mfr = "Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name"
+    cols = ", ".join(f'"{c}"' for c in keep_cols)
+    con.execute(f"""
+        COPY (
+            SELECT {cols}
+            FROM read_csv('{src.as_posix()}', header = true, all_varchar = true,
+                          quote = '"', escape = '"', max_line_size = 10000000)
+            WHERE TRIM("{mfr}") IN ({names})
+        ) TO '{dst.as_posix()}' (HEADER, DELIMITER ',', FORMAT CSV)
+    """)
+    per_name = dict(con.execute(
+        f"""SELECT TRIM("{mfr}"), COUNT(*)
+            FROM read_csv('{dst.as_posix()}', header = true, all_varchar = true)
+            GROUP BY 1""").fetchall())
+    kept = int(sum(per_name.values()))
+    con.close()
+    log.info("  %s: DuckDB filter kept %s rows in %.0fs", src.name, f"{kept:,}",
+             time.time() - t0)
+    return kept, per_name
+
+
 def fetch_open_payments_year(source: dict, year: int, force: bool = False) -> dict:
     """Stream the General Payments bulk CSV, keeping only our manufacturers.
 
@@ -430,27 +472,40 @@ def fetch_open_payments_year(source: dict, year: int, force: bool = False) -> di
         return {"rows": 0}
 
     wanted = {name for names in manufacturers()["parents"].values() for name in names}
+    # The product columns matter as much as the manufacturer. Pfizer and
+    # Janssen promote dozens of products; filtering on the company alone would
+    # count a vaccine lunch as an Eliquis detail. SQL 05 attributes each payment
+    # to a product from these fields.
     keep_cols = ["Covered_Recipient_NPI", "Covered_Recipient_Type",
                  "Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name",
                  "Nature_of_Payment_or_Transfer_of_Value",
-                 "Total_Amount_of_Payment_USDollars", "Program_Year"]
+                 "Total_Amount_of_Payment_USDollars", "Program_Year",
+                 *OP_PRODUCT_COLS]
 
     RAW.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".part")
     kept = 0
     per_name: dict[str, int] = {}
 
-    with open(tmp, "w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=keep_cols, extrasaction="ignore")
-        writer.writeheader()
-        for row in _stream_rows(url, f"open_payments {year}"):
-            mfr = (row.get("Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name")
-                   or "").strip()
-            if mfr not in wanted:
-                continue
-            writer.writerow(row)
-            kept += 1
-            per_name[mfr] = per_name.get(mfr, 0) + 1
+    if not url.startswith(("http://", "https://")):
+        # LOCAL FILE: filter it in DuckDB. Its vectorised, multi-threaded CSV
+        # reader does in ~1 minute what the Python csv loop does in ~6, and it
+        # does not die mid-file: the row-at-a-time text reader raised
+        # `OSError: [Errno 22]` at a different offset on each attempt over the
+        # 8 GB 2023 file, under memory pressure on this machine.
+        kept, per_name = _filter_op_duckdb(Path(url), tmp, wanted, keep_cols)
+    else:
+        with open(tmp, "w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=keep_cols, extrasaction="ignore")
+            writer.writeheader()
+            for row in _stream_rows(url, f"open_payments {year}"):
+                mfr = (row.get("Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name")
+                       or "").strip()
+                if mfr not in wanted:
+                    continue
+                writer.writerow(row)
+                kept += 1
+                per_name[mfr] = per_name.get(mfr, 0) + 1
     tmp.replace(out)
 
     for name in sorted(per_name, key=lambda k: -per_name[k]):

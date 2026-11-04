@@ -50,6 +50,8 @@ STRATEGIES = {
     "Generic Anchors": "Challenge. Committed to warfarin or a competitor; needs clinical, not promotional, messaging.",
     "Eroding Base": "Defend. Share is falling. Diagnose before spending -- this is often a formulary problem, not a call problem.",
     "Low-Value Tail": "No-call. Insufficient volume or headroom to justify field cost.",
+    "Mainstream Writers": "Maintain at planned frequency. No dimension stands out; the call plan matrix, not the segment, sets their calls.",
+    "Steady Core": "Maintain. Large, stable writers at par share -- the base the P&L stands on. Hold frequency; do not reallocate away.",
 }
 
 
@@ -103,7 +105,9 @@ def choose_k(X: np.ndarray) -> pd.DataFrame:
     """Silhouette and bootstrap stability for every candidate k."""
     cfg = params()["segmentation"]
     rng = np.random.default_rng(cfg["random_state"])
-    sil_sample = min(5_000, len(X))
+    # 4,000 points: silhouette is O(n^2) in memory (a 5,000-point sample needs a
+    # 190 MB distance block) and the estimate is stable well below this size.
+    sil_sample = min(4_000, len(X))
     idx_sil = rng.choice(len(X), sil_sample, replace=False)
 
     rows = []
@@ -138,21 +142,31 @@ def name_clusters(profile: pd.DataFrame) -> dict[int, str]:
     output is a stable mapping rather than several clusters claiming the same
     label. Where fewer clusters exist than names, the unused names simply do
     not appear -- that is information, not a failure.
+
+    RELATIVE, NOT ABSOLUTE. Scores are computed on centroids standardised
+    ACROSS clusters, so a name means "most X of the segments found" rather than
+    "X above some constant". The absolute rules this replaced named a 0.46-share
+    cluster "Generic Anchors" and a 0.70-share, 0.67-headroom cluster "Loyal
+    Advocates" -- labels a brand team would have rejected on sight.
     """
-    med_share = profile["brand_share"].median()
-    med_opp = profile["opportunity_pct"].median()
-    med_vol = profile["log_class_fills"].median()
+    cols = ["brand_share", "share_delta_recent", "share_delta_prior",
+            "log_class_fills", "opportunity_pct"]
+    sd = profile[cols].std(ddof=0).replace(0, 1.0).fillna(1.0)
+    z = (profile[cols] - profile[cols].mean()) / sd
 
     scores: dict[int, list[tuple[float, str]]] = {}
-    for cid, r in profile.iterrows():
-        s = []
-        s.append((r["brand_share"] * 2 - abs(r["share_delta_recent"]) * 3, "Loyal Advocates"))
-        s.append((r["share_delta_recent"] * 5 + r["share_delta_prior"] * 2, "Rising Switchers"))
-        s.append((r["opportunity_pct"] * 3 - r["brand_share"] * 2 + r["log_class_fills"] * 0.2,
-                  "Untapped Potential"))
-        s.append(((1 - r["brand_share"]) * 2 - abs(r["share_delta_recent"]) * 3, "Generic Anchors"))
-        s.append((-r["share_delta_recent"] * 5, "Eroding Base"))
-        s.append((-(r["log_class_fills"] - med_vol) * 2 - r["opportunity_pct"], "Low-Value Tail"))
+    for cid, r in z.iterrows():
+        stable = abs(r["share_delta_recent"])
+        s = [
+            (r["brand_share"] - r["opportunity_pct"] - stable, "Loyal Advocates"),
+            (2 * r["share_delta_recent"] + r["share_delta_prior"], "Rising Switchers"),
+            (r["opportunity_pct"] - r["brand_share"] + 0.5 * r["log_class_fills"],
+             "Untapped Potential"),
+            (-r["brand_share"] - stable, "Generic Anchors"),
+            (-2 * r["share_delta_recent"], "Eroding Base"),
+            (-2 * r["log_class_fills"], "Low-Value Tail"),
+            (r["log_class_fills"] - stable - abs(r["brand_share"]), "Steady Core"),
+        ]
         scores[cid] = sorted(s, reverse=True)
 
     assigned: dict[int, str] = {}
@@ -160,20 +174,29 @@ def name_clusters(profile: pd.DataFrame) -> dict[int, str]:
     # Greedy over the strongest (cluster, name) claim available.
     claims = sorted(((sc, cid, nm) for cid, lst in scores.items() for sc, nm in lst),
                     reverse=True)
-    for _sc, cid, nm in claims:
-        if cid in assigned or nm in taken:
+    for sc, cid, nm in claims:
+        # A name is only claimed by a cluster that actually stands out on that
+        # dimension (score above the cross-cluster average). Without this, the
+        # greedy pass handed the last free label to whatever was left -- and a
+        # 0.76-share cluster came out as "Generic Anchors".
+        if sc <= 0 or cid in assigned or nm in taken:
             continue
         assigned[cid] = nm
         taken.add(nm)
     for cid in profile.index:
-        assigned.setdefault(cid, f"Segment {cid}")
-    _ = (med_share, med_opp)   # thresholds retained for future rule tuning
+        if cid not in assigned:
+            if "Mainstream Writers" not in taken:
+                assigned[cid] = "Mainstream Writers"
+                taken.add("Mainstream Writers")
+            else:
+                assigned[cid] = f"Segment {cid}"
     return assigned
 
 
 def run() -> pd.DataFrame:
     proc = path("processed")
-    scored = read_parquet(proc / "hcp_scored.parquet")
+    scored = read_parquet(proc / "hcp_scored.parquet", columns=[
+        "npi", "year", "brand_share", "class_fills", "opportunity_pct_of_potential"])
     payments = read_parquet(proc / "mart_payments.parquet")
 
     panel = build_panel(scored, payments)

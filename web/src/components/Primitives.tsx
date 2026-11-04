@@ -15,19 +15,19 @@ import type { EvidenceClass } from "@/lib/types";
 
 const PILL_STYLE: Record<EvidenceClass, { bg: string; fg: string; label: string; title: string }> = {
   "BACK-TESTED": {
-    bg: "rgba(23,166,115,.13)", fg: "var(--pos)", label: "Back-tested",
+    bg: "rgba(76,125,90,.14)", fg: "var(--pos)", label: "Back-tested",
     title: "Validated against a year the model never saw during fitting.",
   },
   ARITHMETIC: {
-    bg: "rgba(37,99,235,.13)", fg: "var(--info)", label: "Arithmetic",
+    bg: "rgba(107,76,122,.13)", fg: "var(--info)", label: "Arithmetic",
     title: "Computed directly from the data. Contains no behavioural assumption.",
   },
   SCENARIO: {
-    bg: "rgba(180,83,9,.14)", fg: "var(--warn)", label: "Scenario",
+    bg: "rgba(183,121,31,.15)", fg: "var(--warn)", label: "Scenario",
     title: "Depends on a stated assumption. Sensitivity range is published.",
   },
   PROXY: {
-    bg: "rgba(125,138,156,.16)", fg: "var(--ink-mute)", label: "Proxy",
+    bg: "rgba(195,160,167,.25)", fg: "var(--ink-mute)", label: "Proxy",
     title: "A stand-in measure, used because the ideal measure is unavailable.",
   },
 };
@@ -37,7 +37,7 @@ export function EvidencePill({ kind }: { kind: EvidenceClass }) {
   return (
     <span
       title={s.title}
-      className="inline-block rounded-sm px-1.5 py-0.5 text-micro font-semibold uppercase align-middle"
+      className="inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase align-middle"
       style={{ background: s.bg, color: s.fg, letterSpacing: "0.06em" }}
     >
       {s.label}
@@ -84,9 +84,9 @@ export function Kpi({ label, value, note, tone = "default" }: {
   const color =
     tone === "pos" ? "var(--pos)" : tone === "neg" ? "var(--neg)" : "var(--ink)";
   return (
-    <div className="card p-4">
-      <div className="eyebrow mb-1.5">{label}</div>
-      <div className="kpi-value text-[24px] font-semibold leading-none tracking-tight" style={{ color }}>
+    <div className="card p-5 transition-transform duration-base ease-out hover:-translate-y-0.5">
+      <div className="eyebrow mb-2">{label}</div>
+      <div className="kpi-value text-[28px] font-semibold leading-none tracking-tight" style={{ color }}>
         {value}
       </div>
       {note && <div className="text-micro text-ink-mute mt-1.5 normal-case tracking-normal">{note}</div>}
@@ -116,7 +116,7 @@ export function SectionHead({ eyebrow, kind, title, children }: {
           {kind && <EvidencePill kind={kind} />}
         </div>
       )}
-      <h2 className="text-h2">{title}</h2>
+      <h2 className="font-display text-[clamp(1.3rem,1.9vw,1.75rem)] font-bold leading-[1.15] tracking-[-0.01em]">{title}</h2>
       {children && (
         <p className="text-small text-ink-mute mt-1.5 max-w-prose">{children}</p>
       )}
@@ -151,7 +151,7 @@ export function ShareBar({ value }: { value: number | null | undefined }) {
 export function Caveat({ children }: { children: ReactNode }) {
   return (
     <div
-      className="mt-3 rounded-r border-l-[3px] px-3.5 py-3 text-small"
+      className="mt-4 rounded-r-xl border-l-[3px] px-4 py-3 text-small"
       style={{
         borderColor: "var(--flag)",
         background: "color-mix(in oklab, var(--flag) 7%, transparent)",
