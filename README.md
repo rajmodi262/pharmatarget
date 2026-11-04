@@ -1,19 +1,15 @@
 # PharmaTarget
 
-**Pointing the same 60 reps at modelled opportunity instead of prescription
-volume is worth $18.1M a year in incremental contribution — at identical
-headcount and identical cost.**
+**Re-target the same 60 reps on a blended opportunity + volume ranking, hold
+headcount, and redraw the territories.** In a year the model never saw, that
+list captured **1.19× [1.16, 1.21]** the share gains of today's volume-ranked
+list while keeping **91% [89%, 92%]** of its absolute growth. Same reps, same cost.
 
-The model earns that: prescribers it flagged as high-opportunity in 2023 grew
-branded volume **1.37× faster** in 2024 — a year it never saw — than
-propensity-matched prescribers it did not flag. Paired difference **+5.2 fills,
-95% CI [4.1, 6.3]**, across 49,864 pairs balanced on five covariates (worst
-SMD 0.041).
-
-An HCP targeting and territory alignment engine for a branded direct oral
-anticoagulant, built on 29 GB of real Medicare Part D and Open Payments data
-covering **1.38 million prescribers across 2022–2024**. Four questions end to
-end: who to call on, how often, how many reps, and how to draw the map.
+A field-strategy engagement for a branded DOAC (modelled on apixaban), built
+end to end on **real** CMS data: ~39 GB of Medicare Part D and Open Payments
+files covering **1,380,665 prescribers** (267,171 who write the class),
+2022–2024. Four questions: who to call on, how often, how many reps, and how
+to draw the map.
 
 ![Territory alignment before and after](outputs/figures/E5_territory_before_after.png)
 
@@ -21,181 +17,275 @@ end: who to call on, how often, how many reps, and how to draw the map.
 shared scale. Left: territories drawn alphabetically by state. Right:
 capacity-constrained and contiguity-repaired. Same 60 reps.*
 
-| Territory alignment, 60 reps | Before | After |
-|---|---|---|
-| Workload imbalance (max ÷ min) | 157.2× | **2.5×** |
-| Contiguous territories | 20% | **100%** |
-| Mean travel per call | 258 mi | **65 mi** |
-| Workload CV (at 80 reps) | 0.42 | **0.102** |
+---
+
+## The answer, with its evidence class
+
+Every claim is tagged by what kind of claim it is: **BACK-TESTED** (validated
+on the 2024 hold-out year), **ARITHMETIC** (no behavioural assumption), or
+**SCENARIO / ASSOCIATION** (rests on a model of response, or is correlational).
+
+| # | Recommendation | Evidence | Class |
+|---|---|---|---|
+| 1 | **Re-target on the 50/50 hybrid ranking** | Realised 2024 share capture 2.2% vs 1.8% for volume (1.19×), absolute 15.2% vs 16.7% (0.91×); clears the 90% floor in **86%** of bootstrap re-draws, where a weight tuned on 2022→23 clears it in 2% | BACK-TESTED |
+| 2 | **Hold 60 reps, and run a 20% hold-out pilot scored on share points** — worth about $4.5M over two years against deciding blind, with the lowest worst-case regret | Public data show no measurable call response; the 60th rep pays only if a year of calls captures ≥ **1.72%** of remaining opportunity. Scored on brand-share points, a two-quarter pilot detects that with **90%** power; scored on branded fills, with 19% | SCENARIO |
+| 3 | **Redraw the territories** | Workload imbalance 106× → **3.6×**, contiguity 20% → **100%**, travel 235 → **70 mi** | ARITHMETIC |
+| 4 | **Do not read promotion as causal** | Paid prescribers were already gaining share faster *before* payment (+1.0 pt, p < 0.001) | ASSOCIATION |
 
 ---
 
 ## The business problem
 
 Northwind Pharma markets a branded DOAC with a fixed field force of 60 reps,
-roughly $15M/year fully loaded. The force is targeted the way the industry
-targets by default — rank prescribers by prescription volume, call the top
-deciles.
+roughly $15M/year fully loaded, and flat share. The force is targeted the way
+the industry targets by default: rank prescribers by prescription volume, call
+the top deciles.
 
-That rule is structurally wrong. A cardiologist writing 400 class fills a year
-at 91% brand share has almost nothing left to win. An internist writing 120 at
-6% share, in a county with high stroke prevalence and an elderly panel, has a
-great deal. Volume ranking cannot tell them apart, because volume is the wrong
-quantity. The right one is **opportunity** — what a prescriber could reasonably
-reach, minus what they currently give us.
+That rule cannot see headroom. A cardiologist writing 400 class fills at 91%
+brand share has almost nothing left to win; an internist writing 120 at 6%
+share with an elderly, high-risk panel has a great deal. The model estimates
+**opportunity** — what a strong comparable prescriber reaches, minus what this
+one gives the brand today — and the two rankings disagree by two or more
+deciles for **52.0%** of in-market prescribers.
+
+But the back-test then showed that neither pure rule is the answer, and that
+is the most useful finding in the project.
 
 ## Key findings
 
-Each finding is tagged by what kind of claim it is. Nothing here blurs the line
-between something computed, something validated, and something projected.
+**1. The opportunity ranking predicts where share moves** · *back-tested*
 
-**1. The model works out-of-time, with intervals** · *back-tested*
-Fit on 2022–23, frozen, scored against 2024. Every figure below carries a 95%
-interval from a 400-draw percentile bootstrap over prescribers.
+Fit on 2023, frozen, scored against 2024. 95% intervals are a 400-draw
+prescriber bootstrap.
 
 | | Estimate | 95% CI |
 |---|---|---|
-| Share-growth capture vs volume rule | **1.391×** | [1.371, 1.411] — excludes 1.0 |
-| Absolute-growth capture vs volume rule | 0.726× | [0.717, 0.735] — volume wins |
-| Spearman (decile, realised growth) | 0.927 | [0.879, 0.927] |
-| Propensity-matched growth ratio | **1.37×** | paired diff +5.2 [4.1, 6.3] |
+| Flagged vs **propensity-matched** controls (5 covariates, 39,727 pairs, worst SMD 0.053) | **1.40×** branded growth; +4.9 fills | [3.8, 6.0] |
+| Share-growth capture vs volume rule (top 20%) | **1.25×** | [1.24, 1.27] |
+| Absolute-growth capture vs volume rule (top 20%) | 0.82× — volume wins | [0.81, 0.83] |
+| Prescriber-level rank correlation, opportunity vs realised growth | 0.22 | [0.218, 0.225] |
 
-The matched figure uses propensity scoring on five covariates with caliper
-matching, not stratification on volume alone. Proper matching *lowers* the
-estimate from 1.50× to 1.37×, which is what better confounder control should do.
+Gate G3 (ordering, beats volume on share, no micro-prescriber gaming) **passes**.
 
 **τ is a tuning choice, not the finding.** Refitting the frontier across
-τ ∈ [0.65, 0.90]: within ±0.05 of the chosen 0.80 — the range another analyst
-might reasonably have picked — the ranking correlates **ρ ≥ 0.980** with the
-baseline and retains **≥93%** of the top three deciles. It degrades gracefully
-beyond that, worst case ρ 0.924 at ±0.15. Robust where it matters; no claim of
-invariance.
+τ ∈ [0.65, 0.90]: within ±0.05 of 0.80 the ranking correlates **ρ ≥ 0.988**
+with the baseline and keeps **≥ 94%** of the top three deciles; worst case
+ρ 0.950 at ±0.15.
 
-**2. Volume and opportunity disagree for 59.4% of in-market prescribers** · *arithmetic*
-23,615 are low-volume/high-opportunity — invisible to the volume rule. 26,580
-are high-volume/low-opportunity — over-served by it.
+**2. Each pure rule wins one metric — so the decision is the blend** · *back-tested*
 
-**3. Retargeting is worth $18.1M a year at zero incremental cost** · *arithmetic, then scenario*
-At a fixed 60-rep budget, opportunity targeting reaches **6.9%** of addressable
-opportunity against **3.2%** for volume and 0.6% for geography — 2.2× more
-opportunity in front of a rep, same headcount.
+Realised 2024 outcomes of each rule's list at the size 60 reps can actually
+serve (8,878 prescribers):
 
-Priced through the fitted response curve, holding cost identical on both arms:
+| Targeting rule | Share capture | Absolute capture | Net branded fills | Median base |
+|---|---|---|---|---|
+| ML trained on share growth | 14.8% | 2.0% | +140,059 | 35 fills |
+| Opportunity (this model) | 2.6% | 12.6% | +619,001 | 936 |
+| **Hybrid (opportunity + volume)** | **2.2%** | **15.2%** | **+715,980** | 1,230 |
+| ML trained on absolute growth | 2.3% | 15.7% | +793,691 | 1,004 |
+| Volume (status quo) | 1.8% | **16.7%** | +731,958 | 1,411 |
 
-| Allocation rule | Incremental fills | Contribution |
+Pure opportunity wins share but gives up a quarter of the absolute growth —
+a brand team will not trade away its base for share points. The recommendation
+is therefore chosen by a **rule written into the code before the comparison
+was read** (`challenger.recommend_rule`): *the highest share capture among the
+explainable rules, subject to keeping ≥ 90% of the volume rule's absolute
+growth.* Only the hybrid and volume qualify; the hybrid wins.
+
+The ML-on-absolute-growth model edges both, but it is a black box a rep
+cannot be told the reasons for, and it is excluded by design.
+
+**2b. Is 50/50 the right blend, or a number nobody chose?** · *back-tested*
+
+The hybrid's absolute-growth ratio, **0.91 [0.89, 0.92]**, sits right on the
+90% floor, so the weight had to be tested rather than assumed
+(`src/models/decision.py`). Every opportunity weight from 0% to 100% was
+scored on the same 8,878-prescriber budget, **chosen on the 2022→23 market and
+read on the 2023→24 holdout**:
+
+| Weight | Chosen on 2022→23 | 2024 share vs volume | 2024 growth kept | P(clears floor) |
+|---|---|---|---|---|
+| 70%, the floor-maximising weight in 2022→23 | 90.4% kept | 1.23× | **88.1%** | **2%** |
+| **50%, the recommendation** | 92.8% kept | **1.19×** | **90.8%** | **86%** |
+| 45%, if the brand team wants 95% confidence | 93.5% kept | 1.18× | 91.6% | 98% |
+
+The frontier keeps its shape but shifts a couple of points a year, so a
+weight tuned to sit exactly on the floor is a coin toss the next year. Equal
+weight was never tuned and had a 2.8-point margin, which is why it holds.
+The floor is re-read at every annual refresh.
+
+**The challenger that "won".** An ML model trained on share growth beat every
+rule on the share metric by **selecting prescribers writing a median of 35
+fills**, where share swings on a single prescription. That is why gate G3
+carries an anti-gaming condition, and why share capture is never reported
+alone.
+
+**3. Headcount cannot be sized from public data — hold, and measure** · *scenario*
+
+60 reps serve **8,870 of 267,171** in-market prescribers (3.3%) at full
+capacity; the unconstrained call plan wants ~106,900.
+
+The call-response curve was fitted on the closest public proxy for a rep
+visit — Open Payments food-and-beverage events **that name the brand** —
+within volume-decile strata. It shows **no measurable dose-response**
+(the fit sits on its bounds, weighted R² < 0). An earlier version counted
+every Pfizer and Janssen meal, including vaccines and Xarelto, as an Eliquis
+call; once attribution is by product, the apparent response disappears.
+
+So the model does not price headcount on a curve it cannot measure. It
+reports instead the **break-even response**: today's 60th rep pays for itself
+only if a year of calls captures at least **1.72%** of a prescriber's
+remaining opportunity (half-saturation 12 calls/yr, assumed).
+
+**The pilot has to be able to see that number, and the endpoint decides
+whether it can.** On the listed prescribers, the break-even effect is 7.5
+branded fills a year against year-on-year noise of 196 (signal-to-noise
+0.04): branded fills are dominated by practice size. In brand-share points
+it is 0.57 points against 4.7 (0.12, three times better). With a 20% random
+hold-out, a CUPED prior-year adjustment and the real noise of these
+prescribers:
+
+| Design, two quarters | Endpoint: share points | Endpoint: branded fills |
 |---|---|---|
-| Opportunity-ranked | 102,830 | **$34.0M** |
-| Volume-ranked (status quo) | 48,225 | $15.9M |
-| **Delta** | **+54,605** | **+$18.1M** |
+| 20% prescriber hold-out | **90%** power | 19% |
+| Territory split, 30 v 30 (ICC 0.011) | 70% | 16% |
 
-**2.13× uplift on the same 60 reps and the same $15M of field cost.** Because
-cost is identical on both sides it cancels entirely, so this is pure incremental
-contribution — the cleanest form a consulting number takes. It inherits the
-response curve's upper-bound caveat, but every other input is held fixed, so the
-*ratio* between the arms is far more robust than either arm's absolute level.
+So the recommendation is specific: hold out 20% of the new list for two
+quarters, score both arms on brand-share change, keep absolute fills as a
+guardrail, and read it at month six. Below half of break-even, the force is
+larger than calling justifies; above twice break-even, the headcount case
+reopens with a measured number.
 
-**4. The force is already the right size. Don't hire — retarget** · *arithmetic, then scenario*
-60 reps serve **8,389 of 267,171 in-market prescribers — 3.1%** — at 100%
-capacity utilisation. That part is arithmetic.
+**The business case, priced under uncertainty** · *scenario* (`src/models/value.py`)
 
-Break-even sits at **63 reps**. The marginal rep returns **$1.02 per $1** — the
-force is within a rounding error of correctly sized, and the recommendation is
-therefore *not* a headcount change. **It is where those 60 reps point.**
+Contribution is exactly linear in the call response, so every headcount
+decision can be valued for any response, with hiring ($60k per rep,
+6-month ramp at half productivity) and severance costs included. The
+pilot's cost is what the held-out prescribers forgo while their calls go to the
+next names on the list (8.5% of the list's contribution for six months).
 
-**This finding reversed, and how it reversed is the point.** The response curve
-was originally two constants typed into `config/economics.yaml` — a ceiling of
-0.28 and a half-saturation of 12 calls. On those assumptions the model said
-*hire 526 more reps*, which is not a recommendation anyone would act on.
+| Two-year value vs holding, if calls truly work… | 0.25× b-e | 0.5× b-e | 1.0× b-e | 2.0× b-e | 4.0× b-e | Worst regret |
+|---|---|---|---|---|---|---|
+| **Hold + pilot, then decide** | $4.3M | $2.0M | $-1.8M | $0.6M | $15.5M | **$13.4M** |
+| Hold, no pilot | $0.0M | $0.0M | $0.0M | $0.0M | $0.0M | $28.9M |
+| Grow now (+30 reps) | $-13.9M | $-11.1M | $-5.4M | $6.0M | $28.9M | $20.3M |
+| Cut now (−20 reps) | $6.4M | $3.8M | $-1.4M | $-11.8M | $-32.5M | $61.4M |
 
-So the curve was **fitted instead of assumed**, using Open Payments
-food-and-beverage event counts as a rep-visit proxy (§ Method). Measured:
+* **Re-targeting:** $4.2M a year at the break-even response
+  ($2.1M–$8.3M for 0.5–2×),
+  at zero incremental cost.
+* **The pilot:** for a belief centred on break-even, hold-and-pilot is worth
+  **$4.5M** over two years against holding blind, and $2.5M more than
+  the best decision made without it. It is the best strategy for any belief
+  from **0.4× to 1.0×** break-even, and it has the **lowest worst-case regret**
+  of any option.
+* **Hiring:** a full recruiting cycle pays only if calls beat break-even by
+  **1.48×**. No public evidence supports that.
 
-| | Assumed | **Fitted** |
-|---|---|---|
-| Response ceiling | 0.28 | **0.0156** [0.0083, 0.0225] |
-| Half-saturation | 12.0 calls/yr | **1.8** [0.5, 4.3] |
-| → break-even | 586 reps | **63 reps** |
+**The price is falling under the analysis.** CMS's negotiated 2026 Medicare
+price for a 30-day supply of the brand is $231, against the $380 net assumed
+here. That leaves re-targeting untouched, because it costs nothing, but it
+raises the break-even response for every Medicare rep by 1.65× (to about
+2.8%). It is a further reason to measure before hiring.
 
-The assumed ceiling was **18× too optimistic**, and it was carrying the entire
-sizing conclusion. Promotional response saturates after roughly two visits a
-year and captures ~1.6% of remaining headroom — small, and now measured rather
-than asserted. Weighted R² 0.615 across 19 call levels and 249,373 prescribers.
+Priced at that break-even response, re-targeting is worth about **$4.2M a
+year** at identical cost. That figure is **modelled** — it values the
+opportunity model's own view — and is shown only alongside the realised
+comparison in finding 2.
 
-**5. Suppression hides 13.7% of all claim volume, and it is not random** · *arithmetic*
-99.7% of prescriber-years are affected. The bias is systematic:
+**4. Territories: contiguous, balanced, and still compact** · *arithmetic*
+
+| Alignment, 60 reps | Imbalance (max ÷ min) | Workload CV | Contiguous | Travel / call |
+|---|---|---|---|---|
+| Alphabetical by state (how it is done without analytics) | 106× | 0.62 | 20% | 235 mi |
+| Plain workload-weighted k-means (the obvious analytics) | 523× | 0.83 | 98% | 49 mi |
+| **Capacitated + contiguity repair + balance pass** | **3.6×** | **0.129** | **100%** | 70 mi |
+
+k-means is the most compact map and the least usable: one rep gets 500× the
+workload of another. The capacity and balance steps buy implementability for
+21 extra miles per call. Gate G4 (contiguity ≥ 95%, CV ≤ 0.20) **passes**.
+
+**5. Promotional payments: association only** · *association*
+
+| Estimate (brand-share points, 2023 → 2024) | Value |
+|---|---|
+| Paid vs unpaid, naive | +0.0076 |
+| Difference-in-differences, unmatched | −0.0025 [−0.0064, +0.0014] |
+| Difference-in-differences, propensity-matched (7,844 pairs) | +0.0120 [+0.0064, +0.0176] |
+| **Pre-period gap** (treated already gaining share faster) | **+0.0101, p < 0.001** |
+
+The parallel-trends test **failed**, and the matched estimate is about the
+size of the pre-existing gap — so nothing here separates promotion from the
+trend the paid prescribers were already on. Per the pre-committed protocol in
+[CHARTER.md](CHARTER.md), all causal language is removed.
+
+**6. Suppression hides 13.7% of claim volume, concentrated in small prescribers** · *arithmetic*
 
 | Prescriber size | Share of their volume hidden |
 |---|---|
 | <100 claims | **68.7%** |
-| 100–500 | 43.0% |
+| 100–500 | 43.3% |
 | 500–2,000 | 21.6% |
 | 2,000+ | 8.6% |
 
-Small prescribers are close to invisible in this data.
+Hidden class volume is imputed, **capped at what the unobserved class drugs
+can physically hold** (≤ 10 claims each); the cap binds for 16% of in-market
+prescriber-years and imputation adds 9.6% to class volume. Brand share is
+measured on observed volume only, because which drug a suppressed row
+belonged to is unknowable.
 
-**6. Promotional payments: the selection gap is the finding**
-Naive OLS puts the elasticity at **0.061**. On the matched cohort it collapses to
-**0.002** — a factor of **29**. Nearly the entire apparent effect of promotional
-spend is selection: manufacturers pay prescribers who were already going to
-write. Quoting the naive figure alone would overstate the return on promotion by
-an order of magnitude.
+**7. Segmentation, on the addressable market only** · *arithmetic*
 
-The parallel-trends test **failed** — treated and control prescribers were
-already diverging before any payment arrived — so the estimate is reported as an
-**association only** and all causal language was removed, per the pre-committed
-protocol in [CHARTER.md](CHARTER.md). That decision was written down before the
-model was fit.
-
-**7. Behavioural segmentation, on the addressable market only** · *arithmetic*
-k=7 over the 282,182 in-market prescribers. Silhouette **0.229**, bootstrap
-adjusted Rand index **0.950** across 25 resamples. Segments are chosen on
-stability as well as separation — a k that reshuffles under resampling is not a
-segmentation, it is one partition of one sample.
-
-An earlier version reported silhouette 0.807, and that number was an artifact.
-Clustering ran over all 1.59M Part D prescribers, so 83% of its capacity went on
-partitioning people who write **no anticoagulants** into near-identical all-zero
-groups — "Untapped Potential" came back as 64% of the universe with a brand
-share of 0.000006. Trivially separable zero clusters make the geometry look
-excellent while the segmentation says nothing. Restricted to the in-market
-universe, the honest figure is 0.229 and the segments actually differentiate:
-brand share spans 0.19 to 0.70 and Rising Switchers carry a +0.364 share
-trajectory.
+k = 7 over 282,182 in-market prescribers (silhouette 0.255, bootstrap ARI
+0.859 across 25 resamples), named by rule from centroids relative to each
+other: Steady Core 24%, Loyal Advocates 20%, Untapped Potential 13% (share
+0.19, the conversion target), Rising Switchers 6% (+0.48 share trajectory),
+Eroding Base 5%, Mainstream Writers 4%, Low-Value Tail 28%.
 
 ---
 
-## The uncomfortable result, reported in full
+## The data science
 
-The obvious machine-learning alternative was never tested, so I tested it: train
-a model to predict next-year growth **directly**, with more features than the
-frontier model is allowed, strictly out-of-time. At the real 60-rep budget:
+The modelling is held to a data-science review, not just a business one. Everything
+below runs in `src/ds/`, is tracked in MLflow, is shown in the app's **Model Lab**, and
+is written up in **[docs/TECHNICAL_REPORT.md](docs/TECHNICAL_REPORT.md)** with a
+[model card](docs/MODEL_CARD.md) and a [data card](docs/DATA_CARD.md).
 
-| Targeting rule | Share capture | Absolute capture | Median base of selected list |
-|---|---|---|---|
-| ML, trained on share growth | **11.7%** | 1.9% | **35 fills** |
-| Frontier opportunity *(this project)* | 2.4% | 10.3% | 840 fills |
-| ML, trained on absolute growth | 2.1% | 14.9% | 1,052 fills |
-| Volume ranking | 1.7% | **16.0%** | 1,470 fills |
+| Question a reviewer asks | What was done | Result |
+|---|---|---|
+| Is it evaluated properly? | Ladder of 8 rules (random → volume → momentum → frontier → hybrid → three GBMs); primary metric, guardrail and k **declared before results were read**; precision@k, NDCG@k, gain curves, bootstrap CIs | Hybrid wins under the guardrail (14.9% value capture vs 14.7% volume, 3.2% random) |
+| Is the target right? | Empirical-Bayes (beta-binomial) shrinkage, precision weighting, value-aligned target | Found **regression to the mean** (corr -0.563) behind the ML share "win"; value-aligned target fixes it (2.0% → 13.3% absolute capture) |
+| Is 17% of value any good? | Hindsight ceiling and a parametric-bootstrap noise ceiling (Poisson x binomial, B = 30) | Even perfect hindsight captures only 28.5% at this budget; against it the hybrid finds **53% of the achievable value**, the best model 58%, random 11%. Count noise costs almost nothing, so the gap is behaviour change no dataset records |
+| How uncertain is it? | Two-part forecast: P(still writes the brand) + conformalised quantile regression | Hurdle AUC 0.870; 90% intervals cover 90.0% in period, 89.3% out of time |
+| Where is it wrong, and for whom? | Errors and list representation by specialty, size, region, rural | Rural fair (ratio 0.93); primary care and NP/PA long tail under-reached → non-personal channels |
+| What is causal? | Double ML with cross-fitted GBMs + Cinelli–Hazlett sensitivity | +0.65 share pts [0.43, 0.87] vs +1.60 naive; robustness value 1.1%: fragile → pilot |
+| Does the causal estimate fail where it should? | Negative-control treatment (unrelated companies' meals), randomisation inference, dose-response, pre-period outcome | 2/3: survives randomisation (p < 0.005) and rises with dose (+0.47 → +0.68 → +1.16 pts), but unrelated meals show +0.33 pts too, so the brand-specific effect is **+0.32 to +0.65 pts**. Reps call on prescribers whose share just fell (-0.70 pts), which inflates naive estimates |
+| Who is persuadable? | Doubly-robust uplift learner, value-aligned, Qini on held-out folds | Monotone decile staircase (rank corr 0.988); recommend an **uplift arm in the pilot** |
+| Why does it say that? | Exact TreeSHAP from an XGBoost replica, per prescriber (Targets drawer) | Fidelity ρ 0.973; agreement with permutation importance ρ 0.94 |
+| Which choices matter? | Seven ablations | Practice features carry the model (-4.7 pts without them); two simpler variants pre-declared for next year, not adopted on the test set |
+| Is it safe next year? | PSI + KS drift, concept-drift check, data contracts, MLflow | All inputs stable; 58/58 contract checks pass; retrain triggered: False |
+| Do peers matter? | CMS group-practice network (17,447 practices) | Share clusters within practice (ICC 0.163 vs 0.003 chance) but peers add little prediction; 39% of value sits with unlisted practice-mates → randomise the pilot by practice |
 
-**The ML challenger beat this project's model 4.9× on the stated criterion — and
-the win is worthless.** It selects prescribers writing a median of 35 class
-fills a year, where share swings on a single prescription, and delivers 1.9% of
-actual volume. 8,400 rep visits to 35-fill prescribers produce nothing.
+![Evaluation ladder](outputs/figures/DS1_ladder.png)
 
-Two things follow, and both are in the code:
+---
 
-- **The share-capture criterion was gameable**, so gate G3 no longer rests on it.
-  It now requires the ranking to order correctly, to beat volume on the
-  volume-neutral outcome, **and** for the selected list's median base volume to
-  stay within 25% of the volume rule's. This model passes at 61%.
-- **On absolute growth, plain volume ranking wins (16.0%).** I cannot tell you
-  whether that means volume targeting is better, because the back-test measures
-  where growth *happened* and large prescribers grow in absolute terms whether
-  or not anyone visits them. Separating the two needs rep call data, which CMS
-  does not contain.
+## What this audit changed
 
-Reporting four rules and the diagnosis is the honest state of the evidence. A
-single declared winner would not be.
+The project was audited line by line in October 2026, and several published
+numbers did not survive. They are listed because a client would want to know,
+and because how a number was wrong is often worth more than the number.
+
+| Was published | What was wrong | Now |
+|---|---|---|
+| "$18.1M a year from retargeting" | Half of the 60-rep list were prescribers who write **no** anticoagulants (74% of all "opportunity" sat with non-writers); the comparison also wins by construction | Non-writers score zero; the decision rests on realised outcomes; $4.2M shown as modelled only |
+| "Break-even at 63 reps" | Response fitted on every Pfizer/Janssen meal, competitors' included | Brand-attributed visits show no measurable response → hold and pilot |
+| Frontier coverage 0.785; G3 1.0 / 1.4× / 0.8×; deck "0.507× faster" | **The test suite was writing fixture values into the real manifest** | Tests isolated (`tests/conftest.py`); coverage is 0.800 |
+| "29× selection gap" | Divided an elasticity by a share-point difference | All estimates in share points (finding 5) |
+| "Market covariates carry real weight" | Grouped, they carry 6% | Reported by group: practice & patients 76%, specialty 18%, market 6% |
+| Brand share ~0.53 on average | Imputed hidden volume was counted as competitor volume, and was uncapped | Share on observed volume; imputation capped |
+
+The rest of the change log is in [CONTEXT.md §0](CONTEXT.md).
 
 ---
 
@@ -204,153 +294,166 @@ single declared winner would not be.
 | | |
 |---|---|
 | ![E1](outputs/figures/E1_disagreement.png) | ![E2](outputs/figures/E2_backtest_lift.png) |
-| **E1** — volume and opportunity rankings disagree | **E2** — the held-out year: the ranking ranks |
+| **E1** — volume and opportunity rankings disagree | **E2** — the held-out year: growth rises with the decile |
 | ![E3](outputs/figures/E3_reach_curve.png) | ![E6](outputs/figures/E6_challenger.png) |
-| **E3** — same budget, more opportunity reached | **E6** — the ML challenger wins the metric by gaming it |
+| **E3** — modelled headroom reached on the same budget | **E6** — every rule's realised 60-rep outcome |
+| ![E4](outputs/figures/E4_sizing.png) | ![E7](outputs/figures/E7_blend_frontier.png) |
+| **E4** — the response each force size would need | **E7** — the blend frontier: tuned weight drifts through the floor |
+| ![E8](outputs/figures/E8_pilot_power.png) | ![E9](outputs/figures/E9_business_case.png) |
+| **E8** — pilot power: share-point vs branded-fill endpoint | **E9** — every strategy against every belief: where the pilot wins |
 
-Full deck: **[PharmaTarget_Recommendations.pdf](outputs/PharmaTarget_Recommendations.pdf)** (13 slides).
+**For a steering committee:**
 
-Every figure and every slide is generated from the pipeline output by
-`python -m src.report.make_assets` — nothing is typed in, so the deck cannot
-drift from the analysis.
+| Document | What it is |
+|---|---|
+| **[PharmaTarget_Executive.pdf](outputs/PharmaTarget_Executive.pdf)** | 10 slides: answer, summary, problem, evidence, decision rule, map, headcount, business case, pilot, roadmap and the three approvals needed |
+| **[PharmaTarget_OnePager.pdf](outputs/PharmaTarget_OnePager.pdf)** | One-page decision memo |
+| [PharmaTarget_Recommendations.pdf](outputs/PharmaTarget_Recommendations.pdf) | The full 24-page analysis: the appendix |
+| `/brief` in the app | Present mode: the same 10 slides, live and interactive (arrow keys, F for full screen) |
+
+All three PDFs are generated from the pipeline output by
+`python -m src.report.make_assets`, and the app serves them at
+`/api/download/{executive,onepager,full}`. Every figure and every slide is generated
+from the pipeline output by `python -m src.report.make_assets` — nothing is
+typed in.
 
 ## Run it
 
 ```bash
-pip install -r requirements.txt && python -m src.pipeline --synthetic --sample && python -m uvicorn api.main:app
+pip install -r requirements.lock && python -m src.pipeline --synthetic --sample && python -m uvicorn api.main:app
 ```
 
-Two minutes, no downloads, no API keys — then open <http://localhost:8000>.
+About three minutes from a fresh clone, no downloads, no API keys — then open
+<http://localhost:8000>. (`make install-lock && make demo` does the same.) A
+fresh clone is tested exactly this way: all twelve stages including the
+data-science layer, the reports, then every API route.
 
 For real CMS data, put the source files in `dataset/` and run the resumable
-pipeline:
+runner on any OS:
 
 ```bash
-.\run_all.ps1
+python -m src.run            # only the stale stages; --list shows which those are
 ```
 
-Each stage is skipped when its artifact is newer than the module that produces
-it, so an interrupted run resumes and an edited module re-runs only what it
-affects. Read the findings at any point with `python -m src.utils.summary`.
+A stage is skipped when its artifact is newer than every source it depends
+on, so an interrupted run resumes and a fix re-runs exactly what it touches.
+`run_all.ps1` is a thin Windows wrapper over it. `src/pipeline.py` (used by
+CI) runs the same stages in one process. Read the findings at any point with
+`python -m src.utils.summary`.
 
-The public deployment at [https://pharmatarget.onrender.com](https://pharmatarget.onrender.com) serves the top 50,000 prescribers by opportunity out of 1,380,665 analysed; the `data_scope` object in [`/api/meta`](https://pharmatarget.onrender.com/api/meta) states this explicitly, and the Targets page surfaces it as a disclosure line.
+**Deployment.** `Dockerfile` and `render.yaml` serve the slim bundle in
+`data/deploy/` (top 50,000 prescribers by opportunity plus every aggregate,
+rebuilt by the pipeline's `deploy-bundle` stage). It is not currently live;
+`/api/meta` reports `data_scope` so a deployment always states that the
+browsable list is a subset.
 
 | Command | What it does |
 |---|---|
-| `make sample` | Synthetic data + full pipeline (~2 min) |
-| `make download` | Fetch CMS sources (streamed and filtered, ~14 GB transferred) |
-| `.\run_all.ps1 -Serve` | Full pipeline, then serve on :8000 |
+| `make demo` | Synthetic sample pipeline, then serve on :8000 (~3 min) |
+| `make download` | Fetch CMS sources (streamed and filtered) |
+| `make run` / `make stages` | Resumable runner on real data / list what is stale |
 | `make web-install && make web` | Frontend dev server on :5173 |
-| `make test` | 93 tests |
+| `make test` | 235 Python tests (plus 73 frontend tests via `make web-test`) |
+| `make ci` | Everything CI checks: lint, tests, web typecheck, tests and build |
+| `make docker` | Build and run the production image (non-root, health-checked) |
+| `mlflow ui --backend-store-uri ./mlruns` | Every tracked model run: parameters, metrics, artifacts |
+
+### The app
+
+Seven sections in a plum-and-terracotta editorial theme, every number read
+from the API:
+
+| Section | What it is for |
+|---|---|
+| **Overview** | The answer in one sentence, three decisions with their evidence class, and the interactive exhibits behind them (disagreement matrix, reach scrubber, five-rule race) |
+| **The Case** | Situation-complication-question-answer, an issue tree whose verdicts are computed from the pipeline, a flip-card red team, a 36-week roadmap with KPIs, a risk matrix and kill criteria |
+| **Model Lab** | The data science: evaluation ladder and gain curves, the regression-to-the-mean trap, conformal coverage and calibration, errors and representation, double ML with sensitivity, uplift Qini and deciles, SHAP and ablations, drift, contracts and the practice network |
+| **Decision Lab** | Four exhibits to drag, ending with the business case under uncertainty (your belief, its spread and the horizon; payoff and regret matrix; value stack). The first three: the blend frontier (weight slider, bootstrap probability of clearing the floor), a headcount explorer (call response and net-price sliders, with the 2026 Medicare price marked), and a pilot designer (endpoint, design, duration, hold-out size, CUPED) |
+| **Present (`/brief`)** | The 10-slide brief, full screen, with the interactive exhibits in place of pictures |
+| **Call List** | The page a rep works from: pick a territory and get its prescribers in visit order, with calls per month, one sentence on why (the top TreeSHAP driver, in plain units) and the 2025 forecast range. Export to CSV or print. The territory sits in the URL (`/app/calls?t=3`), so a manager can send each rep their own list |
+| **Targets · Territories · Response · Method** | The instruments: the prescriber list (its export matches the filters on screen), the alignment map, the promotion evidence, and the data and gates |
+
+Charts are hand-rolled SVG with no charting library: draw-in animations,
+tooltips, scrubbers, animated re-sorting, and full respect for
+`prefers-reduced-motion`. Every text element on every route clears WCAG AA
+contrast (checked in the browser across 2,600+ elements); the prescriber
+drawer is a proper modal (focus moves in, Tab stays inside, Escape closes,
+focus returns to the row); every page is code-split, so the app shell is 4 KB
+gzipped and a page's code loads only when it is opened. The browser recomputes everything exactly from
+pipeline anchors (marginal ROI is linear in the response and the price, and
+power is a closed form), so dragging never runs a model.
 
 ### On the synthetic mode
 
 The repo ships a generator emitting files with the exact CMS column names and
-the same structural quirks, so the ETL cannot tell synthetic from real and
-anyone can run the pipeline in two minutes instead of downloading 29 GB.
-
-**It validates the pipeline, not the finding** — the generative process encodes
-the hypothesis the model tests, so confirming it there is circular. Every
-artifact is stamped `SYNTHETIC` in the manifest and the UI shows a
-non-dismissible banner.
-
-That mode also taught the lesson it exists to prevent. The generator originally
-emitted a column called `Bene_Age_GE_65_Cnt`. No such column exists in CMS — the
-real file publishes age *bands*. The entire pipeline ran green on synthetic data
-and failed on the first real extract. **A generator that invents a schema
-validates your pipeline against a world that isn't there.**
+the same structural quirks, so the ETL cannot tell synthetic from real.
+**It validates the pipeline, not the finding** — the generative process
+encodes the hypothesis the model tests. Every artifact is stamped `SYNTHETIC`
+and the UI shows a non-dismissible banner.
 
 ---
 
 ## Method
 
 ```
-dataset/ (29 GB)  ──►  streamed + filtered  ──►  DuckDB marts  ──►  sklearn  ──►  FastAPI  ──►  React
-                        ~200 MB retained         4.13M rows       parquet        12 routes
+dataset/ (~39 GB) ──► stream + filter ──► DuckDB marts ──► sklearn ──► FastAPI ──► React
+                       ~1.3 GB kept        4.13M rows        parquet     12 routes
 ```
 
-**Ingest streams rather than downloads.** Naively pulling every source is ~40 GB.
-Each file is consumed as a stream and reduced on the fly: keep class rows, and
-accumulate a per-NPI running total across *all* drugs on the way past. That
-running total is the whole trick — the suppression reconciliation needs Σ(all
-drug rows) per prescriber, and filtering to the class first would destroy it.
-80.0M drug rows in, 1.52M class rows out.
+**Ingest.** The Part D drug file is streamed, keeping class rows while
+accumulating a per-prescriber total across *all* drugs — the suppression
+reconciliation needs Σ(all drug rows), and filtering first would destroy it.
+Local Open Payments files are filtered in DuckDB (vectorised, bounded memory),
+keeping the five product-name fields so promotion can be attributed by
+product. Manufacturer legal names are **discovered** per year, not guessed.
 
-**Suppression, handled correctly.** CMS does not blank low-volume cells in the
-Provider-and-Drug file — it **removes the row**. Any NPI × drug pair under 11
-claims is absent entirely, so you cannot flag a censored row. The gap is
-recovered by reconciling provider-level totals (not row-suppressed) against the
-sum of drug rows, then imputed under a truncated distribution, with three
-imputation modes running end to end.
+**Memory.** Every stage reads only the columns and years it needs, with the
+filter pushed into the parquet reader, and floats as float32 — the full
+real-data pipeline runs on a 16 GB laptop with a browser open.
 
 **Potential and opportunity.** A histogram gradient-boosted **quantile**
-regression at τ=0.80 predicts log class volume from practice and market
-covariates only — panel size net of the class, patient risk score, ZIP3 stroke
-and coronary prevalence from CDC PLACES, population density. The 80th percentile
-is the achievable frontier: what a *strong* comparable prescriber reaches, not an
-average one. Then `opportunity = potential_class × achievable_share − brand_fills`.
+regression at τ = 0.80 predicts log class volume from practice and market
+covariates only; in-sample coverage is **0.800**. A linear (corrected-OLS)
+frontier ranks prescribers similarly (Spearman 0.867). Then
+`opportunity = potential × peer-achievable share − brand fills`, zero for
+prescribers outside the class. The leakage guard raises, never warns.
 
-- In-sample coverage **0.785** against τ=0.80 — the quantile fit converged, so
-  the frontier reading is earned rather than asserted. (The primary fit on the
-  full 2023 universe reaches 0.800; the value in the manifest is the back-test's
-  frozen refit on the training subset, which is the more conservative figure and
-  therefore the one quoted.)
-- Cross-checked against a corrected-OLS stochastic-frontier approximation:
-  Spearman **0.849**. SFA is the textbook approach; agreement that close means
-  the choice of quantile GBM is a convenience, not a load-bearing assumption.
-- Top driver is practice size at **32.4%** of permutation importance — the market
-  covariates carry real weight, so the model is not merely predicting panel size.
-- **The leakage guard raises, never warns.** Name check plus a correlation check
-  at r > 0.97, on every fit.
+**Hybrid rule.** The equal-weight mean of the opportunity and volume
+percentile ranks, declared once (`opportunity.hybrid_score`) — not tuned
+against the hold-out year.
 
-**Deciling happens within the addressable market.** 1.38M prescribers appear in
-Part D; 267,171 write anticoagulants. Deciling across all of them would make
-"decile 9" mean "writes the class at all" rather than "is worth a visit".
+**Call plan.** A frequency matrix (opportunity decile × share band), then a
+capacity cut: rank, fill 60 reps' diaries from the top, everyone past the
+cut is no-call.
 
-**The call plan is capacity-constrained.** The matrix is a frequency policy, not
-a plan. Applied to everyone it produced a target list implying 4,575 reps against
-a force of 60. Real planning ranks the universe and fills the diaries from the
-top; the population past that cut is a finding, and it is what the sizing module
-then prices.
-
-**Territories use capacitated k-means with contiguity repair and a balance
-pass.** Plain capacitated k-means leaves a rep in Ohio owning ZIP3s in Indiana —
-tidy at national zoom, unimplementable in the field. Contiguity is repaired
-inside the iteration loop and asserted in tests. Geography comes from the Census
-Gazetteer crossed with CDC PLACES: 896 ZIP3 units, population-weighted centroids.
+**Territories.** Capacitated k-means with contiguity repair, a squared-
+deviation balance pass and boundary polish, on 896 ZIP3 units (Census
+Gazetteer × CDC PLACES, population-weighted centroids). Every alignment is
+scored against the same workload-weighted centroids.
 
 ---
 
 ## Limitations
 
-1. **Medicare-only.** Part D excludes commercial and Medicaid patients and skews
-   65+. Less distorting for a DOAC than most classes — the indicated population
-   is largely elderly — but it still under-counts younger AF patients.
-2. **~17-month data lag.** Data year 2024 was published May 2026. Better than the
-   two years usually quoted, but not current market conditions.
-3. **Suppression bias remains.** The reconciliation sizes the hidden mass but
-   cannot recover which drugs it belonged to. Residual bias understates
-   low-volume prescribers, who are 68.7% hidden.
-4. **Payments are not causal.** The parallel-trends test failed on this data.
-   Matching balances observed covariates only.
-5. **No call-activity data.** Current-state allocation is inferred from
-   geography, not observed. Finding 3 compares two allocation *rules*, not this
-   model against Northwind's actual field behaviour.
-6. **The back-test measures where growth happened, not where a call would have
-   caused it.** No CMS-only design can separate the two. This is why absolute
-   capture is reported but not used as a pass condition.
-7. **Straight-line distance, not drive time.** Coastal and mountain territories
-   are where this hurts.
-8. **PLACES carries no atrial fibrillation measure** — the actual DOAC
-   indication. Stroke, coronary heart disease and hypertension prevalence are
-   used as proxies, and are labelled as proxies everywhere they appear.
-9. **Territory granularity.** ZIP3 units are indivisible. Real alignments split
-   to ZIP5 to go finer.
-10. **The territory model ignores** rep tenure, existing relationships and org
-    boundaries, which dominate real alignment decisions.
-11. **Economics are public benchmarks, not the client's actuals.** All six live in
-    `config/economics.yaml` with ranges and a stated basis; the tornado chart
-    shows which ones the recommendation is actually sensitive to.
+1. **Medicare-only.** Part D excludes commercial and Medicaid patients and
+   skews 65+; less distorting for a DOAC than most classes.
+2. **~17-month data lag.** Data year 2024 was published May 2026.
+3. **No rep call data.** The back-test shows where growth *happened*, not
+   where a call would have *caused* it. No CMS-only design can separate the
+   two — hence the pilot.
+4. **The visit proxy is weak.** Brand-named meals under-count calls, and reps
+   choose whom to see. "No measurable response" is a statement about the
+   proxy, not proof that calls do nothing.
+5. **Suppression bias remains** for the smallest prescribers (69% hidden).
+6. **New-writer acquisition is not modelled**; non-writers score zero.
+7. **PLACES has no atrial-fibrillation measure**; stroke, CHD and
+   hypertension prevalence are proxies.
+8. **Straight-line distance, indivisible ZIP3s, k-NN adjacency** rather than
+   drive time, ZIP5 splits and real polygons.
+9. **The territory model ignores** rep tenure, relationships and org
+   boundaries, which dominate real alignment decisions.
+10. **Economics are public benchmarks** (`config/economics.yaml`), not the
+    client's actuals.
 
 ---
 
@@ -358,28 +461,23 @@ Gazetteer crossed with CDC PLACES: 896 ZIP3 units, population-weighted centroids
 
 ```
 config/      params.yaml, economics.yaml, manufacturers.yaml — every tunable
-src/ingest/  streaming download, geography build, synthetic generator
+src/ingest/  streaming + DuckDB ingest, geography build, synthetic generator
 src/sql/     01 staging → 03 suppression reconciliation → 05 marts
-src/models/  opportunity · callplan · backtest · challenger · sizing
-             territory · segmentation · response
-api/         12 routes, one read-only DuckDB connection, all filtering in SQL
-web/         React 18 + TS + Vite, 104 KB gzipped, five routes
-tests/       93 tests — leakage guards, contiguity floors, suppression identities,
-             saturation-curve identifiability, matching balance and reuse
-run_all.ps1  resumable, dependency-aware pipeline runner
+src/models/  opportunity · callplan · backtest · challenger · call_response
+             sizing · territory · segmentation · response · robustness · decision · value
+src/ds/      shrinkage · evaluation · ceiling · conformal · errors · causal · placebo
+             uplift · explain
+             ablation · drift · contracts · network · tracking (MLflow)
+docs/        technical report, model card, data card (generated from the pipeline)
+api/         18 routes, DuckDB over parquet, a cursor per request, filtering in SQL
+web/         React 18 + TS + Vite, nine routes plus story and present modes, hand-rolled SVG charts
+tests/       235 tests — manifest isolation, leakage guards, decision rule,
+             contiguity floors, suppression identities, matching balance,
+             API contracts against the deploy bundle, the runner's staleness logic
+src/run.py   resumable, dependency-aware runner (run_all.ps1 wraps it on Windows)
+.github/     CI: lint; tests, pipeline and reports under coverage; API smoke;
+             web typecheck/tests/build; committed-build check; Docker health check
 ```
-
-`/api/hcps` p95 is **71 ms** across 1.38M rows. Filtering, sorting and pagination
-happen in SQL — never in Python lists, never in the browser.
-
-**A note on manufacturer names.** Open Payments legal names bear no resemblance
-to how anyone writes them, and drift between years: `Bristol Myers Squibb
-Company` (no hyphen), `PFIZER INC.` (upper case), `Janssen Pharmaceuticals, Inc`
-(no period). Worse, the headline BMS entity carries only ~124 payment records —
-the apixaban alliance reports through `E.R. Squibb & Sons, L.L.C.`, with 236,558.
-An exact-match filter on a guessed name returns zero rows and no error, so names
-are **discovered** per year (`--discover-manufacturers`) rather than assumed, and
-any configured name matching zero rows is logged.
 
 **Data sources:** [Part D Prescribers by Provider and Drug](https://data.cms.gov/provider-summary-by-type-of-service) ·
 [Part D by Provider](https://data.cms.gov/provider-summary-by-type-of-service) ·
@@ -387,6 +485,6 @@ any configured name matching zero rows is logged.
 [Census Gazetteer ZCTA](https://www.census.gov/geographies/reference-files.html) ·
 [CDC PLACES](https://data.cdc.gov/)
 
-`data/` and `dataset/` are gitignored. See [CHARTER.md](CHARTER.md) for the
-pre-committed protocol — including what was to happen if the back-test failed,
-decided before it was run.
+`data/` and `dataset/` are gitignored except the deploy bundle. See
+[CHARTER.md](CHARTER.md) for the pre-committed protocol — including what was to
+happen if the back-test failed, decided before it was run.

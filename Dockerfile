@@ -41,6 +41,14 @@ ENV PHARMATARGET_DATA_DIR=/app/data/deploy
 #  module resolves it relative to ROOT which is /app, not the data dir.)
 COPY data/manifest.json ./data/manifest.json
 
+# The decision pack, served by /api/download/{executive,onepager,full}.
+COPY outputs/PharmaTarget_Executive.pdf outputs/PharmaTarget_OnePager.pdf outputs/PharmaTarget_Recommendations.pdf ./outputs/
+
+# Run as an unprivileged user: the API only reads files, so nothing in the
+# container needs root, and a compromised process should not have it.
+RUN useradd --create-home --uid 10001 app && chown -R app /app
+USER app
+
 EXPOSE 8000
 ENV PYTHONUNBUFFERED=1
 

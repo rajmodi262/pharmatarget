@@ -19,7 +19,6 @@ import pytest
 
 from src.utils import gates
 
-
 TERRITORY_CFG = {
     "n_reps_default": 60,
     "min_contiguity_rate": 0.95,

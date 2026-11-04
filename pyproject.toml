@@ -18,3 +18,14 @@ ignore = [
 testpaths = ["tests"]
 addopts = "-q --tb=short"
 filterwarnings = ["ignore::DeprecationWarning", "ignore::FutureWarning"]
+
+[tool.coverage.run]
+# Coverage is measured across the unit tests AND an end-to-end synthetic
+# pipeline run (see CI): the ingest, orchestration and report code is exercised
+# by the pipeline, not by unit tests, and counting only one undercounts both.
+source = ["src", "api"]
+parallel = true
+
+[tool.coverage.report]
+skip_empty = true
+show_missing = false

@@ -1,0 +1,40 @@
+# pre-commit install   -- then these run on every commit.
+# The same checks run in CI (.github/workflows/ci.yml); this catches them
+# before a push instead of after.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(web/dist/|data/)
+      - id: end-of-file-fixer
+        exclude: ^(web/dist/|data/)
+      - id: check-yaml
+      - id: check-json
+        exclude: ^web/tsconfig
+      - id: check-merge-conflict
+      # The deploy bundle is committed on purpose (~45 MB); anything else this
+      # large is an accident.
+      - id: check-added-large-files
+        args: ["--maxkb=2000"]
+        exclude: ^data/deploy/
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+  - repo: local
+    hooks:
+      # A Windows path in a PowerShell string turned "\t", "\v" and "\f" into
+      # control characters three times. Refuse them in scripts and config.
+      - id: no-control-chars
+        name: no control characters in scripts or config
+        language: pygrep
+        entry: "[\x0b\x0c]"
+        files: \.(ps1|py|ya?ml|toml|sql)$
+      - id: web-typecheck
+        name: web typecheck
+        language: system
+        entry: npm --prefix web run typecheck
+        files: ^web/src/
+        pass_filenames: false

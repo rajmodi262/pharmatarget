@@ -47,17 +47,21 @@ export function Method() {
               <Row label="Volume metric" value={data.volume_metric} />
               <Row label="Frontier quantile τ" value={stat(pm["tau"], 2)} />
               <Row label="In-sample coverage" value={stat(pm["in_sample_coverage"])} />
-              <Row label="SFA cross-check (Spearman)" value={stat(sfa["spearman"])} />
+              <Row label="Linear-frontier rank agreement (ρ)" value={stat(sfa["spearman"])} />
               <Row
-                label="Top SHAP driver"
+                label="Top driver (permutation)"
                 value={`${shap.feature ?? "––"} (${pct(shap.share, 0)})`}
               />
+              {Object.entries(shap.group_shares ?? {}).map(([g, v]) => (
+                <Row key={g} label={`  · ${g}`} value={pct(v, 0)} />
+              ))}
             </tbody>
           </table>
           <p className="text-micro text-ink-faint mt-2 normal-case tracking-normal">
-            τ = 0.80 is the achievable frontier, not the conditional mean. A corrected-OLS
-            stochastic-frontier approximation ranks prescribers almost identically, so the
-            choice of quantile GBM is a convenience rather than a load-bearing assumption.
+            τ = 0.80 is the achievable frontier, not the conditional mean. A linear
+            (corrected-OLS) frontier ranks prescribers similarly, so the boosted model&apos;s
+            non-linearity is not doing anything exotic to the ordering. Importance is
+            dominated by practice size and patient mix; local-market covariates add little.
           </p>
         </section>
 
@@ -138,6 +142,11 @@ export function Method() {
                     <td className="num py-1.5 text-right">{fmt(v.high, 2)}</td>
                     <td className="text-micro text-ink-faint max-w-[380px] py-1.5 pl-4 normal-case tracking-normal">
                       {v.basis}
+                      {v.sources && v.sources.length > 0 && (
+                        <span className="mt-1 block">
+                          Sources: {v.sources.join(" · ")}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

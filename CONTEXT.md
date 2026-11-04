@@ -1,8 +1,70 @@
 # PharmaTarget — Full Working Context
 
 > **Purpose.** Everything a fresh session needs to continue without re-deriving
-> anything. Last updated 2026-08-09, after the robustness/frontend session.
-> Read this first, then `README.md` for the outward story.
+> anything. Last updated 2026-10-25, after the audit-and-repair session (§0).
+> Read §0 first: **every number in §5 below predates it and is superseded by
+> README.md and data/manifest.json.**
+
+---
+
+# 0a. SESSION 4 (2026-10-25) — DECISION LAB AND REDESIGN
+
+| # | Change | Finding |
+|---|---|---|
+| 4.1 | `src/models/decision.py` (stage `decision`, after robustness): blend weight swept 0→1, chosen on 2022→23, read on the 2023→24 holdout, 200-draw bootstrap of P(clears the 90% floor) | Tuned weight 70% keeps 88.1% in 2024 (P 2%). Equal weight keeps 90.8% (P 86%). Robust weight (P ≥ 95%) is 45%. Keep 50/50 |
+| 4.2 | Pilot power in the same module: break-even effect, winsorised real noise, CUPED ρ, territory ICC, for share-point and branded-fill endpoints | 20% hold-out for 6 months: **90% power on share points, 19% on fills**. Territory split 30 v 30: 70% vs 16%. Endpoint must be share |
+| 4.3 | `/api/decision` endpoint; views `decision_frontier`, `required_response` | The browser recomputes mROI = (ceiling / required(n)) × (price / base) and power exactly |
+| 4.4 | 2026 Medicare negotiated price ($231 / 30 days, CMS Aug 2024) as a named scenario only | Raises break-even response by 1.65× (1.72% → ~2.8%); strengthens "do not hire" |
+| 4.5 | Web redesign: plum #3A1F34 / mauve #C3A0A7 / terracotta #C75A3A tokens, Playfair Display self-hosted, new routes `/app/case` and `/app/lab`, `components/viz/*` interactive SVG | All charts animate on entry and respect reduced motion |
+| 4.6 | Deck: palette, E7 frontier, E8 pilot power, Finding 2b, pilot design, red team, roadmap and kill criteria (24 pages) | |
+
+| 4.7 | `src/models/value.py` (stage `value`): K(n) contribution per unit response, hiring/ramp/severance costs (new in economics.yaml), log-normal belief, pilot as Bayesian measurement, payoff + regret matrix, strategies by belief | Belief at break-even: hold+pilot +$4.5M over 2 yrs vs holding blind (+$2.5M vs best blind decision); best for beliefs 0.4–1.0×; lowest worst-case regret ($13.4M vs 20.3M grow, 28.9M hold); hiring needs ≥ 1.48× |
+| 4.8 | `src/report/executive.py`: 10-slide `PharmaTarget_Executive.pdf` + `PharmaTarget_OnePager.pdf`; `/api/download/{executive,onepager,full}`; `/brief` present mode in the app; PDFs shipped in the Docker image | Full 24-page deck is now the appendix |
+
+| 4.9 | `src/ds/` data-science layer, stage 12 / run_all `ds-*`: shrinkage, evaluation ladder (pre-declared metric), hurdle + conformal forecast, errors/representation, DML + sensitivity, DR-learner uplift, XGBoost-replica TreeSHAP, ablations, PSI + concept drift, data contracts (config/contracts.yaml), CMS group-practice network, MLflow tracking | Regression to the mean behind the ML share "win" (corr -0.563); hybrid wins under the guardrail; coverage 89.3% out of time; DML +0.65 pts, RV 1.1%; practice ICC 0.163 |
+| 4.10 | Model Lab page (`/app/models`), forecast/SHAP/uplift in the Targets drawer, `/api/datascience`, docs/ technical report + model + data cards, deck appendix (28 pp) | |
+| 4.11 | Fixed: a `\v` escape had mangled `src\models\value.py` in run_all.ps1 | |
+
+| 4.12 | Fresh-clone test: the sample pipeline failed at stage 12 because the data contracts' real-data row floors (>=1M) applied to synthetic samples. The volume floor is now skipped on SYNTHETIC data; every schema, key, range and rule check still runs | 58/58 on synthetic; fresh clone runs all 12 stages in ~3 min |
+| 4.13 | .gitignore `data/` -> `data/*`: git cannot re-include files under an ignored directory, so 20 new deploy-bundle tables were silently untracked and a fresh clone's Docker image would have lacked them | |
+| 4.14 | `src/run.py`: cross-platform resumable runner replacing the logic in run_all.ps1 (now a wrapper). Two more corrupted paths found there (`\t` in `src\ds\tracking.py` and `territory_assignments.parquet`), each silently breaking a staleness check | |
+| 4.15 | API: one filter builder for list and export (the export ignored specialty and search); `/api/calllist` + CSV; request-id middleware and JSON 500s; health reports missing core views; readable explanation values (log1p undone; anticoagulant-clinic sentence) | tests/test_api.py, 16 tests on the deploy bundle |
+| 4.16 | Web: Call List page (`/app/calls?t=N`, CSV, print, phone cards); WCAG AA contrast on every route (text-safe terracotta `--terracotta-ink`, darker faint/pos/warn); drawer focus trap and focus return; per-route code splitting (shell 214 KB -> 11 KB); unused three.js removed | 73 web tests |
+| 4.17 | CI: Python 3.10 from the lockfile (lockfile was stale: pandas 1.5.3 pinned, 2.1.4 tested); coverage across tests + pipeline + reports; report build check; web job with committed-build check; Docker job with health check; pre-commit config; non-root container user | |
+| 4.18 | `src/ds/ceiling.py`: hindsight and noise ceilings. Hindsight captures 28.5% at k; a perfect model of expected behaviour 28.0% (98% of it), so count noise is not the limit. Hybrid finds 53% of the achievable maximum, best model 58%, random 11% | Model Lab section 01, README, technical report |
+| 4.19 | `src/ds/placebo.py`: negative-control treatment (unrelated companies' meals), randomisation inference, dose-response, pre-period outcome. 2/3: survives randomisation (p < 0.005) and rises with dose (+0.47 -> +0.68 -> +1.16); unrelated meals +0.33 pts, so the brand-specific effect is +0.32 to +0.65 pts. Grade tightened from a two-way rule to pass/partial/fail after the first run, disclosed in the module; it sits on the half-size line and can flip partial/fail between runs | Model Lab section 05 |
+| 4.20 | `config/economics.yaml`: net price and rep cost now cite sources (BMS/Pfizer WAC $594.10, Oregon PDAB 31% gross-to-net, KFF DTC $346, CMS 2026 MFP $231; Cutting Edge 2008 $175k ~= $255k in 2024 dollars); shown on the Method page | |
+| 4.21 | Real-data re-run of every stale stage with `src/run.py` (18 stages, clean). Territory CV 0.127 -> 0.129 after the geography rebuild; territory-split pilot power 70% -> 72% at 6 months. Recommendation and business case unchanged | |
+
+Tests: 235 Python, 73 web.
+
+---
+
+# 0. SESSION 3 (2026-10-25) — AUDIT AND REPAIR
+
+A line-by-line audit found defects that changed the headline numbers. All are
+fixed in code and the full real-data pipeline was re-run from the marts down.
+
+| # | Defect | Effect | Fix |
+|---|---|---|---|
+| 0.1 | Tests called `record()` unpatched | Real manifest held FIXTURE values: coverage 0.785 (n_train=400), G3 Spearman 1.0 / 1.4× / 0.8×, deck said "grew 0.507× faster". §6.30–6.31 misdiagnosed this as a "mutable blob" | `tests/conftest.py` autouse fixture redirects the manifest |
+| 0.2 | `write_parquet` recorded under the file stem | `response_saturation.parquet` overwrote the response module's own `response_saturation` verdict (same for `backtest_misses`) | artifacts recorded as `artifact:<stem>` |
+| 0.3 | Non-writers scored with the frontier | 74% of all "opportunity" sat with prescribers who write no anticoagulants; half of the 60-rep H2/retargeting list were non-writers | opportunity = 0 when class_fills = 0; H2/reach curve within the in-market universe |
+| 0.4 | EV imputation uncapped, and counted as competitor volume | hidden class claims exceeded the 10-claims-per-unobserved-generic cap for ~16% of in-market prescribers; mean 2023 brand share dragged 0.68 → 0.53 | cap in SQL 03; brand share on OBSERVED volume in SQL 04 |
+| 0.5 | Promotion attributed by company | a Pfizer vaccine lunch counted as an Eliquis call; Janssen Xarelto visits counted as OUR calls; NP/PA payments dropped | product names kept at ingest; SQL 05 attributes by product; NPPs included |
+| 0.6 | "$18.1M" retargeting value | opportunity arm wins by construction | relabelled MODELLED; decision now rests on realised 60-rep outcomes |
+| 0.7 | "29× selection gap" | elasticity ÷ share points | all three estimates in share points; state-cluster bootstrap SE |
+| 0.8 | "Market covariates carry real weight" | they carried ~4% | grouped importance recorded and shown |
+| 0.9 | Spearman CI on 10 decile means | degenerate interval | prescriber-level Spearman |
+| 0.10 | Tornado swept YAML ranges for fitted parameters | "40–589 reps" sensitivity to a value no longer used | fitted params swept over their bootstrap CI |
+| 0.11 | Territory "after" scored on different centroids; only a straw-man baseline | flattered the optimiser | one centroid definition; plain k-means baseline added |
+| 0.12 | Stale deck/deploy bundle/story hard-codes; ruff error; `segment` filter ignored | public-facing contradictions | deck regenerated from manifest; bundle stage in run_all; fixed |
+
+New: a pre-declared **decision rule** (`challenger.recommend_rule`) and a
+declared-once **hybrid** rule (`opportunity.hybrid_score`). `src/pipeline.py`
+now runs every stage run_all runs (challenger, call-response, robustness, gates).
+Local Open Payments files are filtered with DuckDB (the Python csv loop hit
+`OSError 22` mid-file under memory pressure).
 >
 > **Companion docs** (one level up, in `D:\ZS 2\`):
 > `PharmaTarget_v2_Plan.md` · `PharmaTarget_TASKS.md` ·

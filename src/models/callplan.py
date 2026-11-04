@@ -34,6 +34,7 @@ import numpy as np
 import pandas as pd
 
 from src.config import econ, params, path
+from src.models.opportunity import hybrid_score
 from src.utils.io import get_logger, read_parquet, record, write_parquet
 
 log = get_logger(__name__)
@@ -171,11 +172,15 @@ def reach_curve(scored: pd.DataFrame, n_points: int = 60) -> pd.DataFrame:
     frequency. It is a coverage measure, not an outcome measure -- deliberately
     so. See the module docstring.
     """
-    df = scored.copy()
+    # Addressable market only: a random draw over all 1.38M Part D prescribers
+    # would let the geography rule waste most of its budget on non-writers and
+    # flatter every other rule by comparison.
+    df = scored[scored["class_fills"] > 0].copy()
     total_opportunity = df["opportunity"].sum()
     total_class = df["class_fills"].sum()
 
     rules = {
+        "hybrid": hybrid_score(df).rank(ascending=False, method="first"),
         # Rank by modelled opportunity -- the recommendation.
         "opportunity": df["opportunity"].rank(ascending=False, method="first"),
         # Rank by observed class volume -- the industry default.
@@ -213,7 +218,9 @@ def reach_curve(scored: pd.DataFrame, n_points: int = 60) -> pd.DataFrame:
 def headline_h2(scored: pd.DataFrame, n_reps: int | None = None) -> dict:
     """H2: reach under each rule at an identical, fixed call budget."""
     n_reps = n_reps or params()["territory"]["n_reps_default"]
-    df = scored.copy()
+    # Addressable market only -- see reach_curve().
+    df = scored[scored["class_fills"] > 0].copy()
+    df["hybrid"] = hybrid_score(df)
 
     # How many prescribers a force of this size can cover, at the average
     # planned call frequency among prescribers worth calling at all.
@@ -237,7 +244,8 @@ def headline_h2(scored: pd.DataFrame, n_reps: int | None = None) -> dict:
               "avg_calls_per_target": round(float(avg_freq), 2),
               "hcps_reachable": n_reachable, "universe": len(df)}
 
-    for rule, key in (("opportunity", "opportunity"), ("volume", "class_fills")):
+    for rule, key in (("opportunity", "opportunity"), ("volume", "class_fills"),
+                      ("hybrid", "hybrid")):
         top = df.nlargest(n_reachable, key)
         result[f"{rule}_pct_opportunity"] = round(float(top["opportunity"].sum() / total_opp), 4)
         result[f"{rule}_pct_class_volume"] = round(float(top["class_fills"].sum() / total_vol), 4)
@@ -264,9 +272,8 @@ def headline_h2(scored: pd.DataFrame, n_reps: int | None = None) -> dict:
 
 def run() -> pd.DataFrame:
     proc = path("processed")
-    scored = read_parquet(proc / "hcp_scored.parquet")
     current_year = params()["years"]["train_end"]
-    current = scored[scored["year"] == current_year].copy()
+    current = read_parquet(proc / "hcp_scored.parquet", years=[current_year])
 
     planned = apply_call_plan(current)
     write_parquet(planned, proc / "hcp_call_plan.parquet")

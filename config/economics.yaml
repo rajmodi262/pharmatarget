@@ -15,8 +15,13 @@ rep_cost_annual:
   unit: "USD/year"
   basis: >
     Fully loaded US pharma field representative: salary, bonus, benefits,
-    fleet, samples, training and district overhead. Public industry
-    benchmarks cluster in the 200-300k range; midpoint taken as base.
+    fleet, samples, training and district overhead. Cross-check: Cutting Edge
+    Information put the average cost per primary-care rep near $175k in 2008,
+    about $255k in 2024 dollars (CPI-U x1.46); Glassdoor reports ~$166k average
+    total compensation before benefits, car, T&E and management overhead.
+  sources:
+    - "Cutting Edge Information (2008), via healthyskepticism.org/global/library/item/12430"
+    - "Glassdoor, Pharmaceutical Sales Representative salaries (accessed 2026-10-31)"
 
 calls_per_rep_per_day:
   base: 8
@@ -38,10 +43,18 @@ net_revenue_per_30day_fill:
   high: 450
   unit: "USD/30-day fill"
   basis: >
-    Branded DOAC list price of roughly 550-600 per 30-day supply, less an
-    assumed gross-to-net of 30-40% (rebates to PBMs and Part D plans,
-    340B, coverage-gap discounts). Highly plan-mix dependent; the range is
-    wide on purpose.
+    Branded DOAC list price (WAC) of $594.10 per 30-day supply (Eliquis,
+    January 2024), less gross-to-net. Oregon PDAB carrier data put Eliquis at
+    $872 gross vs $601 net per claim in 2023, a 31% concession; the 2025
+    direct-to-consumer cash price ($346) is 43% below list. Base $380 is a 36%
+    discount, inside that 31-43% band. Medicare's negotiated price from 2026 is
+    $231 (IRA maximum fair price) -- below the low end, which is why the
+    Decision Lab marks it separately rather than folding it into this range.
+  sources:
+    - "BMS/Pfizer list price page, eliquis.bmscustomerconnect.com/price"
+    - "Oregon PDAB, Eliquis drug profile, dfr.oregon.gov/pdab/Documents/Eliquis.pdf"
+    - "KFF Quick Take: Eliquis's new lower direct-to-consumer price (2025)"
+    - "CMS fact sheet, negotiated prices for initial price applicability year 2026"
 
 contribution_margin:
   base: 0.87
@@ -69,6 +82,33 @@ call_response_half_saturation:
   high: 24.0
   unit: "annual calls to reach 50% of ceiling response"
   basis: "Hill k parameter; fitted, with the range taken from the bootstrap CI."
+
+# --- Switching costs. Used only by the business case (src/models/value.py):
+# a headcount change is not free and not instantly reversible, which is what
+# makes waiting for a measurement worth something.
+rep_hire_cost:
+  base: 60000
+  low: 40000
+  high: 90000
+  unit: "USD per rep hired, one-off"
+  basis: >
+    Recruiting fees, initial product and compliance training, territory set-up
+    and equipment for a new specialty-care representative. Public benchmarks
+    put onboarding at roughly 20-35% of a first-year fully loaded cost.
+
+rep_ramp_months:
+  base: 6
+  low: 3
+  high: 9
+  unit: "months at half productivity"
+  basis: "Time for a new rep to build access and call frequency in a territory."
+
+rep_separation_cost:
+  base: 50000
+  low: 30000
+  high: 80000
+  unit: "USD per rep released, one-off"
+  basis: "Severance, benefits continuation and territory hand-over disruption."
 
 # Sizing search space for the marginal-ROI curve.
 sizing:

@@ -41,17 +41,11 @@ def run(synthetic: bool = False, sample: bool = False, skip_optional: bool = Fal
     log.info("STAGE 2/8  opportunity model      [GATE G2: opportunity must differ from volume]")
     log.info("=" * 72)
     from src.models import opportunity
+    from src.utils import gates
     opportunity.run()
-    dis = manifest().get("disagreement", {})
-    g2 = dis.get("disagree_by_2plus_pct", 0) >= 0.30
-    log.info("GATE G2 %s -- %.1f%% of prescribers move 2+ deciles (criterion: >=30%%)",
-             "PASSED" if g2 else "FAILED", 100 * dis.get("disagree_by_2plus_pct", 0))
-    if not g2:
-        log.warning("  The opportunity score is tracking volume. Check the SHAP drivers: "
-                    "if practice size dominates, the model has learned panel size and "
-                    "not market headroom.")
-    record("gate_g2", passed=bool(g2), disagree_pct=dis.get("disagree_by_2plus_pct"))
-    results["g2"] = g2
+    # One implementation of each gate, shared with run_all.ps1 via
+    # src/utils/gates.py. Two copies of the criterion drifted before.
+    results["g2"] = gates.gate_g2()["passed"]
 
     log.info("=" * 72)
     log.info("STAGE 3/8  call plan + reach curves")
@@ -62,13 +56,17 @@ def run(synthetic: bool = False, sample: bool = False, skip_optional: bool = Fal
     log.info("=" * 72)
     log.info("STAGE 4/8  back-test              [GATE G3: does the model beat volume?]")
     log.info("=" * 72)
-    from src.models import backtest
+    from src.models import backtest, challenger
     results["backtest"] = backtest.run()
+    results["challenger"] = challenger.run()
 
     log.info("=" * 72)
-    log.info("STAGE 5/8  field force sizing + P&L")
+    log.info("STAGE 5/8  call-response fit, then field force sizing + P&L")
     log.info("=" * 72)
-    from src.models import sizing
+    # call_response MUST precede sizing: sizing prices calls through the fitted
+    # curve and silently falls back to the config constants without it.
+    from src.models import call_response, sizing
+    results["call_response"] = call_response.run()
     results["sizing"] = sizing.run()
 
     log.info("=" * 72)
@@ -76,14 +74,7 @@ def run(synthetic: bool = False, sample: bool = False, skip_optional: bool = Fal
     log.info("=" * 72)
     from src.models import territory
     territory.run()
-    th = manifest().get("territory_headline", {})
-    g4 = th.get("contiguity_after", 0) >= 0.95
-    log.info("GATE G4 %s -- contiguity %.1f%% (was %.1f%%), CV %.3f (was %.3f)",
-             "PASSED" if g4 else "FAILED",
-             100 * th.get("contiguity_after", 0), 100 * th.get("contiguity_before", 0),
-             th.get("cv_after", 0), th.get("cv_before", 0))
-    record("gate_g4", passed=bool(g4))
-    results["g4"] = g4
+    results["g4"] = gates.gate_g4()["passed"]
 
     if not skip_optional:
         log.info("=" * 72)
@@ -97,6 +88,55 @@ def run(synthetic: bool = False, sample: bool = False, skip_optional: bool = Fal
         log.info("=" * 72)
         from src.models import response
         results["response"] = response.run()
+
+        log.info("=" * 72)
+        log.info("STAGE 9/9  robustness: bootstrap CIs, tau sweep, propensity matching")
+        log.info("=" * 72)
+        from src.models import robustness
+        robustness.run()
+
+        log.info("=" * 72)
+        log.info("STAGE 10/10  decision lab: blend frontier and pilot power")
+        log.info("=" * 72)
+        from src.models import decision
+        decision.run()
+
+        log.info("=" * 72)
+        log.info("STAGE 11/11  business case: payoff, regret, value of the pilot")
+        log.info("=" * 72)
+        from src.models import value
+        value.run()
+
+        log.info("=" * 72)
+        log.info("STAGE 12/12  data-science layer: contracts, evaluation, uncertainty, "
+                 "causal ML, uplift, explanations, ablations, drift, network")
+        log.info("=" * 72)
+        from src.ds import (
+            ablation,
+            causal,
+            ceiling,
+            conformal,
+            contracts,
+            drift,
+            errors,
+            evaluation,
+            explain,
+            network,
+            placebo,
+            shrinkage,
+            tracking,
+            uplift,
+        )
+        contracts.run()
+        # ceiling reads the ladder evaluation writes; placebo re-tests causal.
+        for module in (shrinkage, evaluation, ceiling, conformal, errors, causal, placebo,
+                       uplift, explain, ablation, drift):
+            module.run()
+        if network.DAC.exists():
+            network.run()
+        else:
+            log.warning("network: %s not present -- peer analysis skipped", network.DAC.name)
+        tracking.backfill()
 
     elapsed = time.time() - t0
     record("pipeline_run", elapsed_seconds=round(elapsed, 1),

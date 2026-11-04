@@ -25,6 +25,7 @@ WITH base AS (
         p.pct_panel_65,
 
         COALESCE(i.class_fills_{{IMPUTE_MODE}}, 0)  AS class_fills,
+        COALESCE(i.class_fills_observed, 0)         AS class_fills_observed,
         COALESCE(i.brand_fills_observed, 0)         AS brand_fills,
         COALESCE(i.class_drug_rows, 0)              AS class_drug_rows,
         COALESCE(i.suppressed_clms, 0)              AS suppressed_clms,
@@ -64,7 +65,16 @@ WITH base AS (
 with_share AS (
     SELECT
         *,
-        CASE WHEN class_fills > 0 THEN brand_fills / class_fills END AS brand_share
+        -- Share on OBSERVED volume, numerator and denominator alike. The
+        -- imputed hidden class volume cannot be split between brands (which
+        -- generic a suppressed row belonged to is unknowable), so dividing
+        -- observed brand fills by imputed class fills counted every hidden
+        -- claim as a competitor's. That dragged average 2023 share from 0.68 to
+        -- 0.53 -- manufacturing "headroom" exactly where suppression is heavy.
+        -- Imputation sizes the MARKET (class_fills); share is measured where
+        -- the data actually is.
+        CASE WHEN class_fills_observed > 0
+             THEN brand_fills / class_fills_observed END           AS brand_share
     FROM base
 ),
 with_growth AS (

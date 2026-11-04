@@ -47,6 +47,7 @@ from sklearn.preprocessing import OneHotEncoder
 
 from src.config import params, path
 from src.models import opportunity as opp
+from src.models.opportunity import hybrid_score
 from src.utils.io import get_logger, read_parquet, record, write_parquet
 
 log = get_logger(__name__)
@@ -154,6 +155,7 @@ def score_rules(apply_: pd.DataFrame, models: dict) -> pd.DataFrame:
         out[f"score_{name}"] = model.predict(_design(ap, enc, numeric))
     out["score_opportunity"] = out["opportunity"]
     out["score_volume"] = out["class_fills"]
+    out["score_hybrid"] = hybrid_score(out)
     return out
 
 
@@ -195,13 +197,22 @@ def evaluate(df: pd.DataFrame, rules: list[str], n_budget: int) -> pd.DataFrame:
             "mean_base_class_fills": round(float(top["class_fills"].mean()), 1),
             "median_base_class_fills": round(float(top["class_fills"].median()), 1),
             "total_base_class_fills": float(top["class_fills"].sum()),
+            # Net branded fills the list actually gained in the holdout year --
+            # gains minus losses, the number a P&L would see. Not causal (no
+            # call data), but it is realised, not modelled.
+            "net_brand_fill_growth": round(float(top["growth_abs"].sum()), 0),
         })
     return pd.DataFrame(rows)
 
 
 def run() -> pd.DataFrame:
     proc = path("processed")
-    scored = read_parquet(proc / "hcp_scored.parquet")
+    scored = read_parquet(proc / "hcp_scored.parquet", columns=[
+        "npi", "year", "class_fills", "brand_fills", "brand_share", "potential_brand",
+        "opportunity", "opportunity_decile", "in_market",
+        "panel_benes", "non_class_clms", "age65_cnt", "risk_score", "pct_panel_65",
+        "zip3_population", "zip3_pop_density", "prev_stroke", "prev_chd", "prev_bp",
+        "specialty_group", "region"])
     train, apply_ = build_panels(scored)
 
     models = {
@@ -216,7 +227,7 @@ def run() -> pd.DataFrame:
 
     results = evaluate(
         scored_apply,
-        ["opportunity", "volume", "ml_abs", "ml_share"],
+        ["opportunity", "volume", "hybrid", "ml_abs", "ml_share"],
         n_budget,
     )
     results = results.sort_values("share_capture", ascending=False).reset_index(drop=True)
@@ -283,7 +294,51 @@ def run() -> pd.DataFrame:
            winner_share_capture=float(winner["share_capture"]),
            margin_pp=round(float(100 * margin), 2),
            results=results.to_dict(orient="records"))
+    recommend_rule(results)
     return results
+
+
+# The decision rule, stated before the comparison is read and applied as code
+# so the recommendation cannot be chosen after the fact.
+ABS_FLOOR_VS_VOLUME = 0.90
+CANDIDATE_RULES = ("opportunity", "volume", "hybrid")
+
+
+def recommend_rule(results: pd.DataFrame) -> dict:
+    """Pick the targeting rule to recommend from the realised 60-rep comparison.
+
+    CRITERION: among the interpretable candidate rules, take the one with the
+    highest SHARE-growth capture, subject to giving up no more than 10% of the
+    volume rule's ABSOLUTE-growth capture. The floor exists because a brand
+    team will not trade away its base to win share points: absolute fills are
+    the P&L, share is the strategy. Volume always satisfies its own floor, so
+    the rule is never empty, and the ML challengers are excluded because the
+    recommendation has to be explainable to a rep.
+    """
+    r = results.set_index("rule")
+    vol_abs = float(r.loc["volume", "abs_capture"])
+    floor = ABS_FLOOR_VS_VOLUME * vol_abs
+    eligible = [x for x in CANDIDATE_RULES
+                if x in r.index and float(r.loc[x, "abs_capture"]) >= floor]
+    choice = max(eligible, key=lambda x: float(r.loc[x, "share_capture"]))
+    out = {
+        "recommended_rule": choice,
+        "criterion": (f"highest share-growth capture among {list(CANDIDATE_RULES)} with "
+                      f"absolute-growth capture >= {ABS_FLOOR_VS_VOLUME:.0%} of the volume rule's"),
+        "abs_floor": round(floor, 4),
+        "eligible": eligible,
+        "share_capture": float(r.loc[choice, "share_capture"]),
+        "abs_capture": float(r.loc[choice, "abs_capture"]),
+        "share_vs_volume": round(float(r.loc[choice, "share_capture"])
+                                 / max(float(r.loc["volume", "share_capture"]), 1e-9), 3),
+        "abs_vs_volume": round(float(r.loc[choice, "abs_capture"]) / max(vol_abs, 1e-9), 3),
+    }
+    log.info("RECOMMENDED RULE: %s (share %.1f%%, abs %.1f%% = %.0f%% of volume's); "
+             "eligible under the %.0f%% floor: %s",
+             choice, 100 * out["share_capture"], 100 * out["abs_capture"],
+             100 * out["abs_vs_volume"], 100 * ABS_FLOOR_VS_VOLUME, eligible)
+    record("recommendation", **out)
+    return out
 
 
 if __name__ == "__main__":

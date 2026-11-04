@@ -107,8 +107,11 @@ export function Targets() {
   };
 
   const onExport = () => {
+    // Every filter on screen goes to the export, so the file is the list shown.
     window.location.href = api.exportUrl({
+      q: debouncedQ.trim() || undefined,
       state: state || undefined,
+      specialty: specialty || undefined,
       decile_min: decileMin,
       decile_max: 10,
       targets_only: targetsOnly || undefined,

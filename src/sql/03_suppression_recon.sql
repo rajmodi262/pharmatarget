@@ -65,7 +65,8 @@ WITH class_observed AS (
         year,
         SUM(CASE WHEN is_in_class THEN tot_clms ELSE 0 END)      AS observed_class_clms,
         COUNT(*)                                                 AS observed_rows,
-        COUNT(*) FILTER (WHERE is_in_class)                      AS observed_class_rows
+        COUNT(*) FILTER (WHERE is_in_class)                      AS observed_class_rows,
+        COUNT(DISTINCT generic_name) FILTER (WHERE is_in_class)  AS observed_class_generics
     FROM stg_scripts
     GROUP BY npi, year
 ),
@@ -76,7 +77,8 @@ observed AS (
         COALESCE(a.observed_all_clms, 0)          AS observed_all_clms,
         COALESCE(c.observed_class_clms, 0)        AS observed_class_clms,
         COALESCE(c.observed_rows, 0)              AS observed_rows,
-        COALESCE(c.observed_class_rows, 0)        AS observed_class_rows
+        COALESCE(c.observed_class_rows, 0)        AS observed_class_rows,
+        COALESCE(c.observed_class_generics, 0)    AS observed_class_generics
     FROM stg_alldrug_totals a
     FULL OUTER JOIN class_observed c USING (npi, year)
 ),
@@ -90,6 +92,7 @@ joined AS (
         COALESCE(o.observed_class_clms, 0)  AS observed_class_clms,
         COALESCE(o.observed_rows, 0)        AS observed_rows,
         COALESCE(o.observed_class_rows, 0)  AS observed_class_rows,
+        COALESCE(o.observed_class_generics, 0) AS observed_class_generics,
         GREATEST(p.all_drug_clms - COALESCE(o.observed_all_clms, 0), 0) AS suppressed_clms
     FROM stg_prescribers p
     LEFT JOIN observed o USING (npi, year)
@@ -110,6 +113,14 @@ SELECT
     CASE WHEN observed_all_clms > 0
          THEN observed_class_clms / observed_all_clms
          ELSE 0 END                                 AS observed_class_frac,
+    -- THE PHYSICAL CAP. A hidden class row is a class generic this prescriber
+    -- has NO visible row for, holding at most {{SUPPRESSION_MAX}} claims. A
+    -- prescriber with all {{N_CLASS_GENERICS}} class generics visible can hide
+    -- no class volume at all, whatever their share of the gap says. Without
+    -- this cap the proportional estimate exceeded what is possible for ~16% of
+    -- in-market prescribers (~634k imputed claims in 2023 that cannot exist).
+    {{SUPPRESSION_MAX}} * GREATEST({{N_CLASS_GENERICS}} - observed_class_generics, 0)
+                                                    AS hidden_class_clms_cap,
     suppressed_clms > 0                             AS has_suppression
 FROM joined;
 
@@ -129,15 +140,18 @@ SELECT
     -- zero: the file is taken at face value. Conservative, biased low.
     COALESCE(v.class_fills, 0)                      AS class_fills_zero,
 
-    -- ev: expected hidden class volume, scaled to 30-day fills by the
-    --     prescriber's own observed claims-to-fills ratio where available.
+    -- ev: expected hidden class volume -- the prescriber's observed class share
+    --     of the gap, CAPPED at what the unobserved class generics can hold,
+    --     scaled to 30-day fills by their own claims-to-fills ratio.
     COALESCE(v.class_fills, 0)
-        + s.suppressed_clms * s.observed_class_frac
+        + LEAST(s.suppressed_clms * s.observed_class_frac, s.hidden_class_clms_cap)
           * COALESCE(v.class_fills / NULLIF(v.class_clms, 0), 1.0)  AS class_fills_ev,
 
-    -- max: every hidden row assumed to sit at the suppression ceiling.
+    -- max: every unobserved class generic assumed hidden at the ceiling, bounded
+    --     by the gap itself. Only for prescribers who visibly write the class.
     COALESCE(v.class_fills, 0)
-        + CEIL(s.suppressed_clms / 10.0) * 10.0 * s.observed_class_frac
+        + CASE WHEN s.observed_class_frac > 0
+               THEN LEAST(s.suppressed_clms, s.hidden_class_clms_cap) ELSE 0 END
           * COALESCE(v.class_fills / NULLIF(v.class_clms, 0), 1.0)  AS class_fills_max
 FROM stg_suppression s
 LEFT JOIN stg_class_volume v USING (npi, year);

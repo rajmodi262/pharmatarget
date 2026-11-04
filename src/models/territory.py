@@ -80,6 +80,23 @@ def capacity_per_rep() -> float:
 # Baseline
 # --------------------------------------------------------------------------- #
 
+def kmeans_alignment(units: pd.DataFrame, n_territories: int, seed: int = 42) -> np.ndarray:
+    """The baseline an analyst would actually try first: workload-weighted k-means.
+
+    The alphabetical baseline is how maps get drawn WITHOUT analytics; this is
+    how they get drawn with the obvious analytics. It is compact by
+    construction but has no capacity or contiguity constraint, so beating it
+    on balance and contiguity is what isolates the value of those two steps --
+    rather than the value of "using any method at all".
+    """
+    from sklearn.cluster import KMeans
+
+    coords = units[["lat", "lon"]].to_numpy(dtype=float)
+    w = units["workload"].to_numpy(dtype=float) + 1e-6
+    km = KMeans(n_clusters=n_territories, n_init=10, random_state=seed)
+    return km.fit(coords, sample_weight=w).labels_.astype(int)
+
+
 def baseline_alignment(units: pd.DataFrame, n_territories: int) -> np.ndarray:
     """Alphabetical-by-state assignment. The honest 'before'.
 
@@ -273,7 +290,7 @@ def solve(units: pd.DataFrame, n_reps: int, edges: set[tuple[str, str]] | None =
     # both capacity and contiguity. Running the distance polish before the
     # balance pass would let it undo the balance gains.
     assign = _boundary_swaps(units, assign, centroids, edges, capacity)
-    return assign, evaluate(units, assign, edges, centroids)
+    return assign, evaluate(units, assign, edges)
 
 
 def _rebalance(units: pd.DataFrame, assign: np.ndarray, edges: set[tuple[str, str]],
@@ -468,9 +485,16 @@ def evaluate(units: pd.DataFrame, assign: np.ndarray,
     loads = np.array([workload[assign == t].sum() for t in territories])
     active = loads[loads > 0]
 
+    # ONE centroid definition for every alignment being compared: the
+    # workload-weighted centre of the territory's own units, recomputed from the
+    # final assignment. The optimiser used to be scored against its internal
+    # (weighted, pre-polish) centroids while the baseline was scored against
+    # unweighted means -- a measuring-stick difference that flattered "after".
     if centroids is None:
+        w = workload + 1e-9
         centroids = np.array([
-            coords[assign == t].mean(axis=0) if (assign == t).any() else [0.0, 0.0]
+            np.average(coords[assign == t], axis=0, weights=w[assign == t])
+            if (assign == t).any() else [0.0, 0.0]
             for t in range(max(territories) + 1)
         ])
 
@@ -526,8 +550,17 @@ def run(n_reps_list: list[int] | None = None) -> pd.DataFrame:
              default_n, base_stats["imbalance_ratio"] or 0, base_stats["workload_cv"] or 0,
              100 * base_stats["contiguity_rate"], base_stats["mean_weighted_distance_mi"])
 
-    all_stats = [base_stats]
-    assignments = {f"baseline_{default_n}": base_assign}
+    km_assign = kmeans_alignment(units, default_n)
+    km_stats = evaluate(units, km_assign, edges)
+    km_stats["alignment"] = "kmeans"
+    km_stats["n_reps"] = default_n
+    log.info("K-MEANS   @%d reps: imbalance %.2fx, CV %.3f, contiguity %.1f%%, "
+             "mean travel %.0f mi",
+             default_n, km_stats["imbalance_ratio"] or 0, km_stats["workload_cv"] or 0,
+             100 * km_stats["contiguity_rate"], km_stats["mean_weighted_distance_mi"])
+
+    all_stats = [base_stats, km_stats]
+    assignments = {f"baseline_{default_n}": base_assign, f"kmeans_{default_n}": km_assign}
 
     for n in n_reps_list:
         log.info("solving optimised alignment @ %d reps", n)
@@ -582,7 +615,12 @@ def run(n_reps_list: list[int] | None = None) -> pd.DataFrame:
                travel_after=float(o["mean_weighted_distance_mi"]),
                travel_reduction_pct=round(
                    1 - float(o["mean_weighted_distance_mi"])
-                   / max(base_stats["mean_weighted_distance_mi"], 1e-9), 4))
+                   / max(base_stats["mean_weighted_distance_mi"], 1e-9), 4),
+               # The fairer comparison: against plain k-means, not alphabet.
+               kmeans_imbalance=round(km_stats["imbalance_ratio"] or 0, 2),
+               kmeans_cv=round(km_stats["workload_cv"] or 0, 4),
+               kmeans_contiguity=km_stats["contiguity_rate"],
+               kmeans_travel=km_stats["mean_weighted_distance_mi"])
     return stats_df
 
 
